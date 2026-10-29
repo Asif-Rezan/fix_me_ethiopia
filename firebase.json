@@ -1,0 +1,49 @@
+{
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ],
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "emulators": {
+    "auth": {
+      "port": 9099
+    },
+    "functions": {
+      "port": 5001
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "storage": {
+      "port": 9199
+    },
+    "ui": {
+      "enabled": true
+    }
+  },
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "FIX ME ETHIOPIA",
+        "supportEmail": "asifalex101@gmail.com",
+        "authorizedRedirectUris": [
+          "http://localhost:8765",
+          "https://fixme-ethiopia.firebaseapp.com/__/auth/handler",
+          "https://fixme-ethiopia.web.app/__/auth/handler"
+        ]
+      }
+    }
+  }
+}

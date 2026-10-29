@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function signed() { return request.auth != null; }
+  function self(id) { return signed() && request.auth.uid == id; }
+  function admin() { return signed() && request.auth.token.admin == true; }
+  function party(data) { return signed() && (data.customerId == request.auth.uid || data.technicianId == request.auth.uid); }
+  function bookingParty(id) { return party(get(/databases/$(database)/documents/bookings/$(id)).data); }
+  match /users/{id} { allow read: if self(id) || admin(); allow write: if false; }
+  match /customers/{id} { allow read: if self(id) || admin(); allow write: if false; }
+  match /technicians/{id} { allow read: if signed() && (resource.data.approval == 'approved' || self(id) || admin()); allow write: if false; }
+  match /technician_private/{id} { allow read: if self(id) || admin(); allow write: if false; }
+  match /service_categories/{id} { allow read: if true; allow write: if false; }
+  match /service_areas/{id} { allow read: if true; allow write: if false; }
+  match /bookings/{id} {
+   allow read: if party(resource.data) || admin(); allow write: if false;
+   match /private/{doc} { allow read: if bookingParty(id) || admin(); allow write: if false; }
+   match /booking_events/{event} { allow read: if bookingParty(id) || admin(); allow write: if false; }
+  }
+  match /technician_credentials/{id} { allow read, write: if false; }
+  match /qr_verifications/{id} { allow read: if admin() || party(resource.data); allow write: if false; }
+  match /conversations/{id} {
+   allow read: if signed() && request.auth.uid in resource.data.participants; allow write: if false;
+   match /messages/{message} { allow read: if signed() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(id)).data.participants; allow write: if false; }
+  }
+  match /quotes/{id} { allow read: if party(resource.data) || admin(); allow write: if false; }
+  match /payments/{id} { allow read: if party(resource.data) || admin(); allow write: if false; }
+  match /payouts/{id} { allow read: if self(resource.data.technicianId) || admin(); allow write: if false; }
+  match /reviews/{id} { allow read: if signed(); allow write: if false; }
+  match /notifications/{id} { allow read: if self(resource.data.userId); allow write: if false; }
+  match /complaints/{id} { allow read: if self(resource.data.userId) || admin(); allow write: if false; }
+  match /audit_logs/{id} { allow read: if admin(); allow write: if false; }
+  match /{document=**} { allow read,write: if false; }
+ }
+}
