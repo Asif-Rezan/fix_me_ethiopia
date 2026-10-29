@@ -40,6 +40,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      await tester.runAsync(
+        () => precacheImage(
+          const AssetImage('assets/brand/logo.jpeg'),
+          tester.element(find.byType(FixMeApp)),
+        ),
+      );
       container.read(routerProvider).go('/screen/$id');
       await tester.pumpAndSettle();
       await expectLater(

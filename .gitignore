@@ -57,3 +57,5 @@ android/key.properties
 config/*.plist
 
 backend_tests/node_modules/
+
+/test/failures/

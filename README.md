@@ -85,3 +85,14 @@ Camera/photo permissions are declared for issue images and QR scanning. APNs cre
 Gradle uses a 2 GB heap, two workers and in-process Kotlin compilation to bound resource use. Keep several GB free for native builds. The KGP message from current FlutterFire plugins is a compatibility warning, not a reason to enable paid Firebase services.
 
 Maps open an external navigation app when configured with a real service address; no paid live tracking API is provisioned. Online payment processing intentionally remains a demo for later implementation. A separate admin website and store publication are not part of this mobile repository.
+
+
+## Latest verification
+
+- Flutter analyzer: no issues.
+- Flutter tests: 65 passed, including error-message privacy, real auth UI commands, booking/role models and mobile layouts.
+- Firestore emulator: 13 security/workflow tests passed, including an entire cash booking and technician application.
+- Android ARM64 debug APK built and installed on the connected TECNO phone; iOS native build/report delivery is not yet verified.
+- Launcher icons use the official supplied FIX ME ETHIOPIA artwork for Android adaptive/legacy and iOS sizes.
+
+All UI failures pass through a safe message mapper. SDK messages, database/service names, internal paths, raw exceptions and credential hashes are not displayed to customers or technicians. Detailed sanitized diagnostics remain internal. Quota or connection failures show a retry/support message. For a smaller Android build use `flutter build apk --debug --target-platform android-arm64`.

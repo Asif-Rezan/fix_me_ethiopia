@@ -1,3 +1,4 @@
+import '../../../core/errors/user_message.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -27,7 +28,7 @@ class _BookingFormViewState extends ConsumerState<BookingFormView> {
     try {
       await work();
     } catch (e) {
-      if (mounted) setState(() => error = e.toString());
+      if (mounted) setState(() => error = userMessage(e));
     } finally {
       if (mounted) setState(() => busy = false);
     }

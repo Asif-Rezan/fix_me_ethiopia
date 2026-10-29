@@ -127,7 +127,7 @@ void main() {
     await tester.ensureVisible(find.byKey(const ValueKey('google-sign-in')));
     await tester.tap(find.byKey(const ValueKey('google-sign-in')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Cancelled'), findsOneWidget);
+    expect(find.textContaining('Sign-in was cancelled'), findsOneWidget);
     expect(find.text('Authenticated profile'), findsNothing);
   });
 }

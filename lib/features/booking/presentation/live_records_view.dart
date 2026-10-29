@@ -1,4 +1,6 @@
+import '../../../core/errors/user_message.dart';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -28,7 +30,7 @@ class LiveRecordsView extends ConsumerWidget {
         if (context.mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text(e.toString())));
+          ).showSnackBar(SnackBar(content: Text(userMessage(e))));
         }
       }
     }
@@ -51,7 +53,7 @@ class LiveRecordsView extends ConsumerWidget {
           if (result?.photoUrl != null)
             StoredImage(id: result!.photoUrl!, height: 160),
           Text(result?.technicianName ?? 'No verified technician'),
-          Text('Credential: ${result?.credentialId ?? "unavailable"}'),
+          const Text('This check applies only to your current booking.'),
           const Text(
             'Compare the person at your door with this photo. A badge match alone does not prove physical identity.',
           ),
@@ -89,7 +91,7 @@ class LiveRecordsView extends ConsumerWidget {
           ),
         if (screenId == 29)
           Text(
-            'Application status: ${account?.approval.name ?? 'loading'}',
+            'Application status: ${readableStatus(account?.approval.name ?? 'pending')}',
             style: const TextStyle(fontSize: 20),
           ),
         records.when(
@@ -103,7 +105,7 @@ class LiveRecordsView extends ConsumerWidget {
               child: Column(
                 children: [
                   const Text(
-                    'Unable to load your data. Check connection and Firebase setup.',
+                    'We couldn’t load your updates. Check your connection and try again.',
                   ),
                   TextButton(
                     onPressed: () =>
@@ -209,11 +211,13 @@ class LiveRecordsView extends ConsumerWidget {
                               if (row.values.containsKey(key))
                                 Padding(
                                   padding: const EdgeInsets.only(top: 8),
-                                  child: Text('$key: ${row.text(key)}'),
+                                  child: Text(
+                                    '${const {'status': 'Booking status', 'issue': 'Issue', 'scheduledAt': 'Scheduled visit', 'visitFee': 'Visit fee', 'approvedTotal': 'Approved total', 'approval': 'Account status', 'rating': 'Rating', 'availableBalance': 'Available balance'}[key] ?? 'Details'}: ${['status', 'approval'].contains(key) ? readableStatus(row.text(key)) : row.text(key)}',
+                                  ),
                                 ),
                             if (screenId == 36)
                               const Text(
-                                'A printed badge identifies a server-issued credential. Always compare the technician’s photo and name. Badge display is available only after approval.',
+                                'Show this ID to your customer. Your customer should compare your photo and name before work starts.',
                               ),
                             if ([7, 23, 30, 31, 32].contains(screenId))
                               TextButton(
@@ -402,7 +406,7 @@ class LiveRecordsView extends ConsumerWidget {
                                 StoredImage(id: photo as String),
                             if (screenId == 22)
                               const Text(
-                                'A receipt is issued after the server confirms settlement. A reported cash payment is not yet a settled payment.',
+                                'Your receipt is ready after your technician confirms receiving payment.',
                               ),
                           ],
                         ),
@@ -471,6 +475,16 @@ class BookingAddress extends ConsumerWidget {
               leading: const Icon(Icons.location_on_outlined),
               title: const Text('Service address'),
               subtitle: Text(rows.first.text('address')),
+              trailing: IconButton(
+                tooltip: 'Open free map',
+                icon: const Icon(Icons.map_outlined),
+                onPressed: () => launchUrl(
+                  Uri.https('www.openstreetmap.org', '/search', {
+                    'query': rows.first.text('address'),
+                  }),
+                  mode: LaunchMode.externalApplication,
+                ),
+              ),
             ),
     );
   }

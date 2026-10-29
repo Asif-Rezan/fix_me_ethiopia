@@ -1,3 +1,4 @@
+import '../../core/errors/user_message.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -79,7 +80,7 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
       await action();
     } catch (e) {
       if (mounted) {
-        setState(() => error = e.toString().replaceFirst('Exception: ', ''));
+        setState(() => error = userMessage(e));
       }
     } finally {
       if (mounted) setState(() => busy = false);
@@ -150,7 +151,7 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
       await Clipboard.setData(
         ClipboardData(
           text:
-              'FIX ME ETHIOPIA\n${flow.bookingId}\n${production ? 'Invoice is available after server payment confirmation.' : 'DEMO receipt • ETB 1,350 • not a payment receipt'}',
+              'FIX ME ETHIOPIA\n${flow.bookingId}\n${production ? 'Invoice is available after payment is confirmed.' : 'DEMO receipt • ETB 1,350 • not a payment receipt'}',
         ),
       );
       toast('Invoice details copied');
@@ -447,8 +448,11 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
             constraints: const BoxConstraints(maxWidth: 480),
             child: designs.when(
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (e, s) =>
-                  Center(child: Text('Unable to load screens: $e')),
+              error: (e, s) => Center(
+                child: Text(
+                  'We couldn’t load this page. Please reopen the app.',
+                ),
+              ),
               data: (all) {
                 final screen = Map<String, dynamic>.from(all[id - 1] as Map);
                 return Column(
@@ -1677,7 +1681,7 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
           children: [
             Icon(Icons.badge_outlined, size: 100, color: navy),
             Text(
-              'Credential issued after server approval',
+              'Your ID will be available after approval',
               style: TextStyle(fontSize: 11, color: muted),
             ),
           ],

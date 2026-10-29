@@ -60,7 +60,7 @@ Future<void> main() async {
       }
     } catch (e) {
       startupError =
-          'Firebase could not start. Check platform configuration and App Check.\n$e';
+          'We couldn’t start the app. Please reopen it. If this continues, contact support.';
     }
   }
   runApp(ProviderScope(child: FixMeApp(startupError: startupError)));

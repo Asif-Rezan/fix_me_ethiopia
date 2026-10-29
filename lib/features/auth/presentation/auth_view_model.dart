@@ -49,9 +49,7 @@ class AuthViewModel extends AsyncNotifier<void> {
   Future<void> social({bool apple = false}) async {
     final repo = ref.read(repositoryProvider);
     if (repo is! AuthGateway) {
-      throw StateError(
-        'Social sign-in is only available in the Firebase build.',
-      );
+      throw StateError('Google sign-in is unavailable in this preview.');
     }
     await (apple
         ? (repo as AuthGateway).signInWithApple(

@@ -7,7 +7,7 @@ class FirebasePushGateway implements PushGateway {
     final settings = await FirebaseMessaging.instance.requestPermission();
     if (settings.authorizationStatus == AuthorizationStatus.denied) {
       throw StateError(
-        'Notification permission is disabled. Enable it in system settings.',
+        'Please enable notifications in your phone settings.',
       );
     }
     final registered = FirebaseMessaging.instance.onRegistered.first.timeout(

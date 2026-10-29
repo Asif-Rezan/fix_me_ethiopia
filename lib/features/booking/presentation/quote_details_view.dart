@@ -1,3 +1,4 @@
+import '../../../core/errors/user_message.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'records_view_model.dart';
@@ -32,7 +33,7 @@ class QuoteDetails extends ConsumerWidget {
         if (context.mounted) {
           ScaffoldMessenger.of(
             context,
-          ).showSnackBar(SnackBar(content: Text(e.toString())));
+          ).showSnackBar(SnackBar(content: Text(userMessage(e))));
         }
       }
     }

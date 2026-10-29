@@ -1,3 +1,4 @@
+import '../../../core/errors/user_message.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -44,9 +45,7 @@ class _AuthViewState extends ConsumerState<AuthView> {
       }
     } catch (error) {
       if (mounted) {
-        setState(
-          () => _error = error.toString().replaceFirst('Exception: ', ''),
-        );
+        setState(() => _error = userMessage(error));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
