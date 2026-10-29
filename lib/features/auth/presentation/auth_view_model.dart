@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/domain.dart';
 import '../../../core/state.dart';
 import '../domain/auth_gateway.dart';
+import '../../../core/telemetry/telemetry.dart';
 
 class AuthViewModel extends AsyncNotifier<void> {
   @override
@@ -22,7 +23,18 @@ class AuthViewModel extends AsyncNotifier<void> {
         await repo.register(name, email, password, role);
       }
     });
+    if (!state.hasError) {
+      await ref
+          .read(telemetryProvider)
+          .event(
+            signIn ? 'login' : 'sign_up',
+            parameters: {'method': 'password'},
+          );
+    }
     if (state.hasError) {
+      await ref
+          .read(telemetryProvider)
+          .failure('authentication', state.error!, state.stackTrace!);
       Error.throwWithStackTrace(state.error!, state.stackTrace!);
     }
   }
@@ -48,6 +60,9 @@ class AuthViewModel extends AsyncNotifier<void> {
         : (repo as AuthGateway).signInWithGoogle(
             ref.read(flowProvider).role.name,
           ));
+    await ref
+        .read(telemetryProvider)
+        .event('login', parameters: {'method': apple ? 'apple' : 'google'});
   }
 
   Future<void> completeProfile() => ref

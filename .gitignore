@@ -45,8 +45,6 @@ app.*.map.json
 /android/app/release
 
 config/*.json
-android/app/google-services.json
-ios/Runner/GoogleService-Info.plist
 functions/node_modules/
 functions/lib/
 .firebase/
@@ -57,3 +55,5 @@ android/key.properties
 *.keystore
 
 config/*.plist
+
+backend_tests/node_modules/

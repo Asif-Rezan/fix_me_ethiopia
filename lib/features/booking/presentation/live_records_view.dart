@@ -3,9 +3,13 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/state.dart';
+import '../../../core/presentation/stored_image.dart';
 import 'records_view_model.dart';
 import 'booking_view_model.dart';
 import 'verification_view_model.dart';
+import 'quote_details_view.dart';
+import '../../account/presentation/account_tools_view.dart';
+import '../../account/presentation/account_view_model.dart';
 import '../../../core/domain.dart';
 
 class LiveRecordsView extends ConsumerWidget {
@@ -45,11 +49,7 @@ class LiveRecordsView extends ConsumerWidget {
             style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
           ),
           if (result?.photoUrl != null)
-            Image.network(
-              result!.photoUrl!,
-              height: 160,
-              errorBuilder: (_, e, s) => const Icon(Icons.person, size: 100),
-            ),
+            StoredImage(id: result!.photoUrl!, height: 160),
           Text(result?.technicianName ?? 'No verified technician'),
           Text('Credential: ${result?.credentialId ?? "unavailable"}'),
           const Text(
@@ -121,8 +121,30 @@ class LiveRecordsView extends ConsumerWidget {
                 child: Text('Nothing here yet. Your updates will appear here.'),
               );
             }
+            final filtered = screenId == 10
+                ? rows.where((row) {
+                    final skills = row.values['skills'] as List? ?? [];
+                    final category = ref
+                        .read(flowProvider)
+                        .fields['categoryId'];
+                    return category == null || skills.contains(category);
+                  }).toList()
+                : rows;
+            if (filtered.isEmpty) {
+              return Column(
+                children: [
+                  const Text(
+                    'No approved technicians are available for this service yet.',
+                  ),
+                  TextButton(
+                    onPressed: () => go(12),
+                    child: const Text('Request this service'),
+                  ),
+                ],
+              );
+            }
             return Column(
-              children: rows
+              children: filtered
                   .map(
                     (row) => Card(
                       color: Colors.white,
@@ -144,6 +166,25 @@ class LiveRecordsView extends ConsumerWidget {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
+                            if ([10, 11].contains(screenId) &&
+                                row.text('photoId').isNotEmpty)
+                              StoredImage(id: row.text('photoId')),
+                            if (row.text('quoteId').isNotEmpty)
+                              QuoteDetails(
+                                quoteId: row.text('quoteId'),
+                                canRespond:
+                                    account?.role == AccountRole.customer,
+                              ),
+                            if (screenId == 11)
+                              TextButton.icon(
+                                onPressed: () => command(
+                                  () => ref
+                                      .read(accountViewModelProvider.notifier)
+                                      .favorite(row.id, true),
+                                ),
+                                icon: const Icon(Icons.favorite_border),
+                                label: const Text('Save favorite'),
+                              ),
                             if (screenId == 36 &&
                                 row.text('badgeToken').isNotEmpty) ...[
                               QrImageView(
@@ -194,11 +235,43 @@ class LiveRecordsView extends ConsumerWidget {
                                   ref
                                       .read(flowProvider.notifier)
                                       .field('technicianId', row.id);
+                                  ref
+                                      .read(flowProvider.notifier)
+                                      .field(
+                                        'technicianName',
+                                        row.text('name'),
+                                      );
+                                  if (screenId == 10) {
+                                    go(11);
+                                    return;
+                                  }
                                   go(12);
                                 },
                                 child: const Text('Book technician'),
                               ),
-                            if ([16, 33].contains(screenId)) ...[
+                            if ([33, 37].contains(screenId) &&
+                                row.text('status') == 'in_progress' &&
+                                account?.role == AccountRole.technician)
+                              for (final task in {
+                                'inspection': 'Initial inspection',
+                                'diagnosis': 'Diagnose the issue',
+                                'repair': 'Complete the repair',
+                                'test': 'Test operation',
+                              }.entries)
+                                CheckboxListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: Text(task.value),
+                                  value:
+                                      (row.values['checklist']
+                                          as Map?)?[task.key] ==
+                                      true,
+                                  onChanged: (value) => command(
+                                    () => ref
+                                        .read(bookingViewModelProvider.notifier)
+                                        .task(task.key, value ?? false),
+                                  ),
+                                ),
+                            if ([16, 33, 37].contains(screenId)) ...[
                               if (row.text('status') == 'assigned' &&
                                   account?.role == AccountRole.technician) ...[
                                 FilledButton(
@@ -321,6 +394,12 @@ class LiveRecordsView extends ConsumerWidget {
                                 child: const Text('Open chat'),
                               ),
                             ],
+                            if ([16, 33, 34].contains(screenId))
+                              BookingAddress(bookingId: row.id),
+                            if ([16, 33, 37].contains(screenId))
+                              for (final photo
+                                  in row.values['issuePhotos'] as List? ?? [])
+                                StoredImage(id: photo as String),
                             if (screenId == 22)
                               const Text(
                                 'A receipt is issued after the server confirms settlement. A reported cash payment is not yet a settled payment.',
@@ -334,6 +413,26 @@ class LiveRecordsView extends ConsumerWidget {
             );
           },
         ),
+        if (screenId == 25) const AccountTools(),
+        if (screenId == 21 || screenId == 41)
+          OutlinedButton(
+            onPressed: () => showDialog<void>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Payment gateway demo'),
+                content: const Text(
+                  'Online payments are not connected. This demo does not collect money or change your booking payment status. Cash after service is available.',
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('Close'),
+                  ),
+                ],
+              ),
+            ),
+            child: const Text('Try online payment (demo)'),
+          ),
         if (screenId == 25 || screenId == 43)
           OutlinedButton(
             onPressed: () => go(45),
@@ -346,6 +445,33 @@ class LiveRecordsView extends ConsumerWidget {
             child: const Text('Choose a booking'),
           ),
       ],
+    );
+  }
+}
+
+class BookingAddress extends ConsumerWidget {
+  const BookingAddress({super.key, required this.bookingId});
+  final String bookingId;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final record = ref.watch(
+      recordsViewModelProvider((
+        collection: 'bookings/$bookingId/private',
+        ownerField: null,
+        ownerId: null,
+        documentId: 'address',
+      )),
+    );
+    return record.when(
+      loading: () => const SizedBox.shrink(),
+      error: (_, s) => const Text('Address unavailable'),
+      data: (rows) => rows.isEmpty
+          ? const SizedBox.shrink()
+          : ListTile(
+              leading: const Icon(Icons.location_on_outlined),
+              title: const Text('Service address'),
+              subtitle: Text(rows.first.text('address')),
+            ),
     );
   }
 }

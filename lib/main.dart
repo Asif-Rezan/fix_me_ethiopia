@@ -1,4 +1,4 @@
-import 'dart:ui';
+import 'features/booking/presentation/booking_form_view.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,10 +7,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
-import 'package:firebase_storage/firebase_storage.dart';
-import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'core/state.dart';
+import 'core/telemetry/telemetry.dart';
 import 'firebase_options.dart';
 import 'core/domain.dart';
 import 'features/auth/domain/role_policy.dart';
@@ -43,6 +41,11 @@ Future<void> main() async {
                 iosBundleId: 'et.fixme.app',
               ),
       );
+      try {
+        await FirebaseTelemetry.initialize();
+      } catch (e) {
+        debugPrint('Telemetry startup unavailable: ${e.runtimeType}');
+      }
       const emulators = bool.fromEnvironment('USE_EMULATORS');
       if (emulators) {
         const host = String.fromEnvironment(
@@ -51,17 +54,9 @@ Future<void> main() async {
         );
         await FirebaseAuth.instance.useAuthEmulator(host, 9099);
         FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
-        FirebaseFunctions.instance.useFunctionsEmulator(host, 5001);
-        await FirebaseStorage.instance.useStorageEmulator(host, 9199);
       }
       if (!kIsWeb && !emulators) {
         await FirebaseAppCheck.instance.activate();
-        FlutterError.onError =
-            FirebaseCrashlytics.instance.recordFlutterFatalError;
-        PlatformDispatcher.instance.onError = (error, stack) {
-          FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
-          return true;
-        };
       }
     } catch (e) {
       startupError =
@@ -87,6 +82,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   });
   final router = GoRouter(
     initialLocation: '/screen/1',
+    observers: [TelemetryObserver(ref.read(telemetryProvider))],
     refreshListenable: refresh,
     redirect: (_, state) {
       if (state.pathParameters['id'] == '5') return '/screen/4';
@@ -102,10 +98,17 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: '/screen/:id',
-        builder: (_, state) {
+        pageBuilder: (_, state) {
           final id = int.tryParse(state.pathParameters['id'] ?? '1') ?? 1;
-          if (id == 4) return const AuthView();
-          return ReferenceScreen(key: ValueKey(id), id: id.clamp(1, 45));
+          return MaterialPage(
+            key: state.pageKey,
+            name: 'screen_$id',
+            child: id == 4
+                ? const AuthView()
+                : production && id >= 12 && id <= 15
+                ? BookingFormView(step: id)
+                : ReferenceScreen(key: ValueKey(id), id: id.clamp(1, 45)),
+          );
         },
       ),
     ],

@@ -10,9 +10,14 @@ final mediaRepositoryProvider = Provider<MediaRepository>(
 
 class MediaViewModel extends Notifier<List<String>> {
   final List<Uint8List> _pending = [];
+  String? profileId;
   @override
   List<String> build() => [];
-  Future<void> upload(Uint8List bytes, {required bool kyc}) async {
+  Future<void> upload(
+    Uint8List bytes, {
+    required bool kyc,
+    bool profile = false,
+  }) async {
     final uid = ref.read(accountProvider).asData?.value?.uid;
     if (!production) {
       state = [...state, 'demo-image-${state.length}'];
@@ -20,17 +25,20 @@ class MediaViewModel extends Notifier<List<String>> {
     }
     if (uid == null) throw StateError('Sign in before uploading.');
     final bookingId = ref.read(flowProvider).bookingId;
-    if (!kyc && bookingId.isEmpty) {
+    if (!kyc && !profile && bookingId.isEmpty) {
       _pending.add(bytes);
       state = [...state, 'pending-${_pending.length}'];
       return;
     }
-    final path = kyc
+    final path = profile
+        ? 'profiles/$uid/${DateTime.now().microsecondsSinceEpoch}.jpg'
+        : kyc
         ? 'kyc/$uid/${DateTime.now().microsecondsSinceEpoch}.jpg'
         : 'bookings/$bookingId/$uid/${DateTime.now().microsecondsSinceEpoch}.jpg';
     final result = await ref
         .read(mediaRepositoryProvider)
         .upload(bytes: bytes, path: path);
+    if (profile) profileId = result;
     state = [...state, result];
   }
 
@@ -50,6 +58,7 @@ class MediaViewModel extends Notifier<List<String>> {
 
   void clear() {
     _pending.clear();
+    profileId = null;
     state = [];
   }
 }

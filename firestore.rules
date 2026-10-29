@@ -3,66 +3,183 @@ service cloud.firestore {
  match /databases/{database}/documents {
   function signed() { return request.auth != null; }
   function self(id) { return signed() && request.auth.uid == id; }
-  function admin() { return signed() && request.auth.token.admin == true; }
-  function party(data) { return signed() && (data.customerId == request.auth.uid || data.technicianId == request.auth.uid); }
-  function bookingParty(id) { return party(get(/databases/$(database)/documents/bookings/$(id)).data); }
+  function admin() { return signed() && ('admin' in request.auth.token) && request.auth.token.admin == true; }
+  function user() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+  function approved() { return signed() && user().approval == 'approved'; }
+  function customer() { return approved() && user().role == 'customer'; }
+  function technician() { return approved() && user().role == 'technician'; }
+  function party(b) { return signed() && (b.customerId == request.auth.uid || b.technicianId == request.auth.uid); }
+  function b(id) { return get(/databases/$(database)/documents/bookings/$(id)).data; }
+  function afterB(id) { return getAfter(/databases/$(database)/documents/bookings/$(id)).data; }
+  function only(fields) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields); }
+  function pendingApplication(id) { return getAfter(/databases/$(database)/documents/users/$(id)).data.approval == 'pending'; }
+  function validApplication(id) {
+   let p=getAfter(/databases/$(database)/documents/technician_private/$(id)).data;
+   let t=getAfter(/databases/$(database)/documents/technicians/$(id)).data;
+   return p.photoId is string && get(/databases/$(database)/documents/private_media/$(p.photoId)).data.kind=='profile' && get(/databases/$(database)/documents/private_media/$(p.photoId)).data.ownerId==id && p.documents is list && p.documents.size()>=2 && p.documents.size()<=8
+    && t.skills is list && t.skills.size()>0 && t.skills.size()<=20
+    && get(/databases/$(database)/documents/private_media/$(p.documents[0])).data.ownerId==id && get(/databases/$(database)/documents/private_media/$(p.documents[0])).data.kind=='kyc'
+    && get(/databases/$(database)/documents/private_media/$(p.documents[1])).data.ownerId==id && get(/databases/$(database)/documents/private_media/$(p.documents[1])).data.kind=='kyc';
+  }
   match /users/{id} {
    allow read: if self(id) || admin();
-   // Users may choose a customer/technician account once. Rules fix approval;
-   // there is no client-writable admin role or technician approval path.
-   allow create: if self(id)
-     && request.resource.data.keys().hasOnly(['name','role','approval','profileComplete','createdAt'])
-     && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
-     && request.resource.data.role in ['customer','technician']
-     && request.resource.data.approval == (request.resource.data.role == 'customer' ? 'approved' : 'incomplete')
-     && request.resource.data.profileComplete == false
-     && request.resource.data.createdAt == request.time;
-   allow update: if self(id)
-     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','profile','profileComplete','updatedAt'])
-     && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
-     && request.resource.data.profile is map
-     && request.resource.data.profile.keys().hasOnly(['Full name','Email','City','Address'])
-     && request.resource.data.profileComplete == true
-     && request.resource.data.updatedAt == request.time;
+   allow create: if self(id) && request.resource.data.keys().hasOnly(['name','role','approval','profileComplete','createdAt'])
+    && request.resource.data.name is string && request.resource.data.name.size()>0 && request.resource.data.name.size()<=120
+    && request.resource.data.role in ['customer','technician']
+    && request.resource.data.approval==(request.resource.data.role=='customer'?'approved':'incomplete')
+    && request.resource.data.profileComplete==false && request.resource.data.createdAt==request.time;
+   allow update: if admin() || (self(id) && (
+    (only(['name','profile','profileComplete','updatedAt']) && request.resource.data.name is string && request.resource.data.name.size()>0 && request.resource.data.name.size()<=120
+     && request.resource.data.profile is map && request.resource.data.profile.keys().hasOnly(['Full name','Email','City','Address'])
+     && request.resource.data.profileComplete==true && request.resource.data.updatedAt==request.time)
+    || (resource.data.role=='technician' && resource.data.approval in ['incomplete','rejected'] && only(['approval','updatedAt'])
+     && request.resource.data.approval=='pending' && request.resource.data.updatedAt==request.time && validApplication(id))));
    allow delete: if false;
+   match /devices/{device} { allow read: if self(id); allow write: if self(id) && request.resource.data.keys().hasOnly(['token','updatedAt']) && request.resource.data.token is string && request.resource.data.token.size()<=4096 && request.resource.data.updatedAt==request.time; }
   }
   match /customers/{id} {
-   allow read: if self(id) || admin();
-   allow create: if self(id) && getAfter(/databases/$(database)/documents/users/$(id)).data.role == 'customer'
-     && request.resource.data.keys().hasOnly(['name','approval','online','createdAt'])
-     && request.resource.data.name == getAfter(/databases/$(database)/documents/users/$(id)).data.name
-     && request.resource.data.approval == 'approved' && request.resource.data.online == false && request.resource.data.createdAt == request.time;
+   allow read: if self(id)||admin();
+   allow create: if self(id) && getAfter(/databases/$(database)/documents/users/$(id)).data.role=='customer'
+    && request.resource.data.keys().hasOnly(['name','approval','online','createdAt'])
+    && request.resource.data.name==getAfter(/databases/$(database)/documents/users/$(id)).data.name
+    && request.resource.data.approval=='approved' && request.resource.data.online==false && request.resource.data.createdAt==request.time;
    allow update,delete: if false;
+   match /addresses/{address} { allow read,delete: if self(id); allow create,update: if self(id) && request.resource.data.keys().hasOnly(['label','address','updatedAt']) && request.resource.data.label is string && request.resource.data.label.size()<=60 && request.resource.data.address is string && request.resource.data.address.size()<=500 && request.resource.data.updatedAt==request.time; }
+   match /favorites/{tech} { allow read,delete: if self(id); allow create: if self(id) && request.resource.data.keys().hasOnly(['createdAt']) && request.resource.data.createdAt==request.time; }
   }
   match /technicians/{id} {
-   allow read: if signed() && (resource.data.approval == 'approved' || self(id) || admin());
-   allow create: if self(id) && getAfter(/databases/$(database)/documents/users/$(id)).data.role == 'technician'
-     && request.resource.data.keys().hasOnly(['name','approval','online','createdAt'])
-     && request.resource.data.name == getAfter(/databases/$(database)/documents/users/$(id)).data.name
-     && request.resource.data.approval == 'incomplete' && request.resource.data.online == false && request.resource.data.createdAt == request.time;
+   allow read: if signed() && (resource.data.approval=='approved'||self(id)||admin());
+   allow create: if self(id) && getAfter(/databases/$(database)/documents/users/$(id)).data.role=='technician'
+    && request.resource.data.keys().hasOnly(['name','approval','online','createdAt'])
+    && request.resource.data.name==getAfter(/databases/$(database)/documents/users/$(id)).data.name
+    && request.resource.data.approval=='incomplete' && request.resource.data.online==false && request.resource.data.createdAt==request.time;
+   allow update: if admin() || (self(id) && (
+    (technician() && resource.data.approval=='approved' && only(['online']) && request.resource.data.online is bool)
+    || (resource.data.approval in ['incomplete','rejected'] && only(['approval','skills','online']) && request.resource.data.approval=='pending' && request.resource.data.online==false && pendingApplication(id) && validApplication(id))));
+   allow delete: if false;
+  }
+  match /technician_private/{id} {
+   allow read: if self(id)||admin();
+   allow create,update: if admin() || (self(id) && pendingApplication(id) && request.resource.data.keys().hasOnly(['profile','documents','submittedAt','photoId']) && request.resource.data.profile is map && request.resource.data.documents is list && request.resource.data.documents.size()>=2 && request.resource.data.documents.size()<=8 && request.resource.data.submittedAt==request.time);
+   allow delete: if false;
+  }
+  match /service_categories/{id} { allow read: if true; allow write: if admin(); }
+  match /service_areas/{id} { allow read: if true; allow write: if admin(); }
+  function eventValid(id,d) {
+   let e=getAfter(/databases/$(database)/documents/bookings/$(id)/booking_events/$(d.lastEventId)).data;
+   return e.status==d.status && e.actorId==request.auth.uid && e.createdAt==request.time;
+  }
+  function validBadge(id,b,d) {
+   let c=get(/databases/$(database)/documents/technician_credentials/$(d.verifiedCredentialId)).data;
+   let t=get(/databases/$(database)/documents/technicians/$(b.technicianId)).data;
+   let v=getAfter(/databases/$(database)/documents/qr_verifications/$(d.verificationId)).data;
+   return c.active==true && c.technicianId==b.technicianId && t.approval=='approved'
+    && d.verifiedAt==request.time && v.bookingId==id && v.matched==true;
+  }
+  function bookingTransition(id,old,d) {
+   let tech=technician() && old.technicianId==request.auth.uid;
+   let cust=customer() && old.customerId==request.auth.uid;
+   let common=['status','updatedAt','lastEventId'];
+   return (
+    (tech && only(common) && (
+      (old.status=='assigned' && d.status=='accepted') || (old.status=='accepted' && d.status=='on_the_way')
+      || (old.status=='on_the_way' && d.status=='arrived') || (old.status=='identity_verified' && d.status=='in_progress')
+      || (old.status=='in_progress' && d.status=='work_completed' && old.quoteApprovedAt is timestamp)
+      || (old.status in ['on_the_way','arrived','identity_verified','in_progress','quote_pending','work_completed'] && d.status=='disputed')))
+    || (tech && old.status=='assigned' && d.status=='searching' && d.technicianId==null && only(common.concat(['technicianId'])))
+    || (cust && only(common) && ((old.status in ['requested','searching','assigned','accepted'] && d.status=='cancelled')
+      || (old.status=='work_completed' && d.status=='customer_confirmed')
+      || (old.status in ['on_the_way','arrived','identity_verified','in_progress','quote_pending','work_completed','payment_pending'] && d.status=='disputed')))
+    || (cust && old.status=='arrived' && d.status=='identity_verified' && only(common.concat(['verifiedAt','verifiedCredentialId','verificationId'])) && validBadge(id,old,d))
+    || (tech && old.status=='in_progress' && d.status=='quote_pending' && only(common.concat(['quoteId']))
+      && getAfter(/databases/$(database)/documents/quotes/$(d.quoteId)).data.bookingId==id)
+    || (cust && old.status=='quote_pending' && d.status=='in_progress' && only(common.concat(['quoteApprovedAt','approvedTotal'])) && (
+      (getAfter(/databases/$(database)/documents/quotes/$(old.quoteId)).data.status=='approved' && d.quoteApprovedAt==request.time && d.approvedTotal==getAfter(/databases/$(database)/documents/quotes/$(old.quoteId)).data.total)
+      || (getAfter(/databases/$(database)/documents/quotes/$(old.quoteId)).data.status=='rejected' && !d.keys().hasAny(['quoteApprovedAt','approvedTotal']))))
+    || (cust && old.status=='customer_confirmed' && d.status=='payment_pending' && only(common)
+      && getAfter(/databases/$(database)/documents/payments/$(id)).data.status=='customer_reported')
+    || (tech && old.status=='payment_pending' && d.status=='completed' && only(common.concat(['completedAt'])) && d.completedAt==request.time
+      && getAfter(/databases/$(database)/documents/payments/$(id)).data.status=='settled')
+   );
+  }
+  match /bookings/{id} {
+   allow read: if party(resource.data)||admin();
+   allow create: if customer() && request.resource.data.keys().hasOnly(['customerId','technicianId','categoryId','issue','scheduledAt','status','visitFee','createdAt','updatedAt','lastEventId'])
+    && request.resource.data.customerId==request.auth.uid
+    && (request.resource.data.status=='requested' && request.resource.data.technicianId==null
+      || request.resource.data.status=='assigned' && request.resource.data.technicianId is string && get(/databases/$(database)/documents/technicians/$(request.resource.data.technicianId)).data.approval=='approved')
+    && get(/databases/$(database)/documents/service_categories/$(request.resource.data.categoryId)).data.active==true
+    && request.resource.data.visitFee==get(/databases/$(database)/documents/service_categories/$(request.resource.data.categoryId)).data.visitFee
+    && request.resource.data.issue is string && request.resource.data.issue.size()>0 && request.resource.data.issue.size()<=2000
+    && request.resource.data.scheduledAt is timestamp && request.resource.data.scheduledAt>request.time
+    && request.resource.data.createdAt==request.time && request.resource.data.updatedAt==request.time && eventValid(id,request.resource.data);
+   allow update: if admin() || (party(resource.data) && (
+    (technician() && resource.data.technicianId==request.auth.uid && resource.data.status=='in_progress' && only(['checklist']) && request.resource.data.checklist is map && request.resource.data.checklist.keys().hasOnly(['inspection','diagnosis','repair','test'])
+     && (!('inspection' in request.resource.data.checklist)||request.resource.data.checklist.inspection is bool) && (!('diagnosis' in request.resource.data.checklist)||request.resource.data.checklist.diagnosis is bool) && (!('repair' in request.resource.data.checklist)||request.resource.data.checklist.repair is bool) && (!('test' in request.resource.data.checklist)||request.resource.data.checklist.test is bool))
+    || (only(['issuePhotos']) && resource.data.customerId==request.auth.uid && request.resource.data.issuePhotos is list && request.resource.data.issuePhotos.size()<=8)
+    || (request.resource.data.updatedAt==request.time && request.resource.data.lastEventId!=resource.data.lastEventId && eventValid(id,request.resource.data) && bookingTransition(id,resource.data,request.resource.data))));
+   allow delete: if false;
+   match /private/{doc} { allow read: if party(b(id))||admin(); allow create: if self(request.resource.data.customerId) && afterB(id).customerId==request.auth.uid && request.resource.data.keys().hasOnly(['customerId','address']) && request.resource.data.address is string && request.resource.data.address.size()<=500; allow update,delete: if false; }
+   match /booking_events/{event} { allow read: if party(b(id))||admin(); allow create: if signed() && request.resource.data.keys().hasOnly(['status','actorId','createdAt']) && request.resource.data.actorId==request.auth.uid && request.resource.data.createdAt==request.time && afterB(id).lastEventId==event && afterB(id).status==request.resource.data.status && party(afterB(id)); allow update,delete: if false; }
+  }
+  match /technician_credentials/{id} { allow get: if signed() && resource.data.active==true; allow list,write: if admin(); }
+  match /qr_verifications/{id} {
+   allow read: if party(resource.data)||admin();
+   allow create: if customer() && request.resource.data.keys().hasOnly(['bookingId','customerId','technicianId','credentialId','matched','createdAt'])
+    && request.resource.data.customerId==request.auth.uid && request.resource.data.matched==true && request.resource.data.createdAt==request.time
+    && b(request.resource.data.bookingId).status=='arrived' && b(request.resource.data.bookingId).customerId==request.auth.uid
+    && request.resource.data.technicianId==b(request.resource.data.bookingId).technicianId
+    && afterB(request.resource.data.bookingId).verificationId==id && afterB(request.resource.data.bookingId).verifiedCredentialId==request.resource.data.credentialId && afterB(request.resource.data.bookingId).status=='identity_verified';
    allow update,delete: if false;
   }
-  match /technician_private/{id} { allow read: if self(id) || admin(); allow write: if false; }
-  match /service_categories/{id} { allow read: if true; allow write: if false; }
-  match /service_areas/{id} { allow read: if true; allow write: if false; }
-  match /bookings/{id} {
-   allow read: if party(resource.data) || admin(); allow write: if false;
-   match /private/{doc} { allow read: if bookingParty(id) || admin(); allow write: if false; }
-   match /booking_events/{event} { allow read: if bookingParty(id) || admin(); allow write: if false; }
+  match /quotes/{id} {
+   allow read: if party(resource.data)||admin();
+   allow create: if technician() && request.resource.data.keys().hasOnly(['bookingId','customerId','technicianId','visit','labor','parts','total','description','status','createdAt'])
+    && request.resource.data.technicianId==request.auth.uid && b(request.resource.data.bookingId).technicianId==request.auth.uid
+    && b(request.resource.data.bookingId).status=='in_progress' && b(request.resource.data.bookingId).verifiedAt is timestamp
+    && request.resource.data.customerId==b(request.resource.data.bookingId).customerId && request.resource.data.visit==b(request.resource.data.bookingId).visitFee
+    && request.resource.data.labor is int && request.resource.data.labor>=0 && request.resource.data.labor<=1000000
+    && request.resource.data.parts is int && request.resource.data.parts>=0 && request.resource.data.parts<=1000000
+    && request.resource.data.total==request.resource.data.visit+request.resource.data.labor+request.resource.data.parts
+    && request.resource.data.description is string && request.resource.data.description.size()<=2000
+    && request.resource.data.status=='pending' && request.resource.data.createdAt==request.time
+    && afterB(request.resource.data.bookingId).quoteId==id && afterB(request.resource.data.bookingId).status=='quote_pending';
+   allow update: if customer() && resource.data.customerId==request.auth.uid && resource.data.status=='pending' && only(['status','respondedAt'])
+    && request.resource.data.status in ['approved','rejected'] && request.resource.data.respondedAt==request.time
+    && afterB(resource.data.bookingId).quoteId==id && afterB(resource.data.bookingId).status=='in_progress';
+   allow delete: if false;
   }
-  match /technician_credentials/{id} { allow read, write: if false; }
-  match /qr_verifications/{id} { allow read: if admin() || party(resource.data); allow write: if false; }
+  match /payments/{id} {
+   allow read: if party(resource.data)||admin();
+   allow create: if customer() && request.resource.data.keys().hasOnly(['bookingId','customerId','technicianId','amount','method','status','createdAt'])
+    && id==request.resource.data.bookingId && b(id).status=='customer_confirmed' && b(id).customerId==request.auth.uid
+    && request.resource.data.customerId==request.auth.uid && request.resource.data.technicianId==b(id).technicianId
+    && request.resource.data.amount==b(id).approvedTotal && request.resource.data.method=='cash'
+    && request.resource.data.status=='customer_reported' && request.resource.data.createdAt==request.time && afterB(id).status=='payment_pending';
+   allow update: if technician() && resource.data.technicianId==request.auth.uid && resource.data.status=='customer_reported' && only(['status','settledAt'])
+    && request.resource.data.status=='settled' && request.resource.data.settledAt==request.time && afterB(id).status=='completed';
+   allow delete: if false;
+  }
   match /conversations/{id} {
-   allow read: if signed() && request.auth.uid in resource.data.participants; allow write: if false;
-   match /messages/{message} { allow read: if signed() && request.auth.uid in get(/databases/$(database)/documents/conversations/$(id)).data.participants; allow write: if false; }
+   allow read: if signed() && request.auth.uid in resource.data.participants;
+   allow create,update: if party(b(id)) && request.resource.data.keys().hasOnly(['participants','updatedAt']) && request.resource.data.participants==[b(id).customerId,b(id).technicianId] && request.resource.data.updatedAt==request.time;
+   allow delete: if false;
+   match /messages/{message} { allow read: if party(b(id)); allow create: if party(b(id)) && request.resource.data.keys().hasOnly(['senderId','text','createdAt']) && request.resource.data.senderId==request.auth.uid && request.resource.data.text is string && request.resource.data.text.size()>0 && request.resource.data.text.size()<=2000 && request.resource.data.createdAt==request.time; allow update,delete: if false; }
   }
-  match /quotes/{id} { allow read: if party(resource.data) || admin(); allow write: if false; }
-  match /payments/{id} { allow read: if party(resource.data) || admin(); allow write: if false; }
-  match /payouts/{id} { allow read: if self(resource.data.technicianId) || admin(); allow write: if false; }
-  match /reviews/{id} { allow read: if signed(); allow write: if false; }
-  match /notifications/{id} { allow read: if self(resource.data.userId); allow write: if false; }
-  match /complaints/{id} { allow read: if self(resource.data.userId) || admin(); allow write: if false; }
-  match /audit_logs/{id} { allow read: if admin(); allow write: if false; }
+  match /private_media/{id} {
+   allow read: if admin() || self(resource.data.ownerId) || (resource.data.kind=='booking' && party(b(resource.data.bookingId)))
+    || (resource.data.kind=='profile' && signed());
+   allow create: if signed() && request.resource.data.keys().hasOnly(['ownerId','kind','bookingId','base64','createdAt'])
+    && request.resource.data.ownerId==request.auth.uid && request.resource.data.kind in ['kyc','booking','profile']
+    && request.resource.data.base64 is string && request.resource.data.base64.size()<=400000 && request.resource.data.base64.size()>0
+    && request.resource.data.createdAt==request.time && (request.resource.data.kind!='booking' || party(b(request.resource.data.bookingId)));
+   allow update,delete: if false;
+  }
+  match /reviews/{id} { allow read: if signed(); allow create: if customer() && id==request.resource.data.bookingId && b(id).customerId==request.auth.uid && b(id).status=='completed' && request.resource.data.keys().hasOnly(['bookingId','customerId','technicianId','rating','text','createdAt']) && request.resource.data.customerId==request.auth.uid && request.resource.data.technicianId==b(id).technicianId && request.resource.data.rating is int && request.resource.data.rating>=1 && request.resource.data.rating<=5 && request.resource.data.text is string && request.resource.data.text.size()<=2000 && request.resource.data.createdAt==request.time; allow update,delete: if false; }
+  match /notifications/{id} { allow read: if self(resource.data.userId); allow write: if admin(); }
+  match /complaints/{id} { allow read: if self(resource.data.userId)||admin(); allow create: if signed() && request.resource.data.keys().hasOnly(['userId','bookingId','description','status','createdAt']) && request.resource.data.userId==request.auth.uid && request.resource.data.description is string && request.resource.data.description.size()>=10 && request.resource.data.description.size()<=2000 && request.resource.data.status=='open' && request.resource.data.createdAt==request.time; allow update: if admin(); allow delete: if false; }
+  match /payouts/{id} { allow read: if self(resource.data.technicianId)||admin(); allow write: if false; }
+  match /audit_logs/{id} { allow read,write: if admin(); }
   match /{document=**} { allow read,write: if false; }
  }
 }

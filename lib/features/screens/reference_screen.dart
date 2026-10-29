@@ -16,6 +16,7 @@ import '../booking/presentation/live_records_view.dart';
 import '../booking/presentation/records_view_model.dart';
 import '../technician/presentation/media_view_model.dart';
 import '../notifications/presentation/notifications_view_model.dart';
+import '../catalog/presentation/catalog_view.dart';
 
 const navy = Color(0xFF092B4D),
     orange = Color(0xFFFF6410),
@@ -267,7 +268,8 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
         final bookingId = await ref
             .read(bookingViewModelProvider.notifier)
             .create({
-              'categoryId': 'refrigerator',
+              'categoryId': flow.fields['categoryId'] ?? 'refrigerator',
+              'technicianId': flow.fields['technicianId'],
               'issue': flow.fields['Describe the issue'] ?? '',
               'address': flow.fields['Address'] ?? 'Bole, Addis Ababa',
               'scheduledAt':
@@ -368,7 +370,7 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
     toast('Select an option to continue.');
   }
 
-  Future<void> upload() async {
+  Future<void> upload({bool profile = false}) async {
     await run(() async {
       final picked = await ImagePicker().pickMultiImage(
         imageQuality: 80,
@@ -377,7 +379,11 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
       for (final file in picked) {
         await ref
             .read(mediaViewModelProvider.notifier)
-            .upload(await file.readAsBytes(), kyc: id == 28);
+            .upload(
+              await file.readAsBytes(),
+              kyc: id == 28 && !profile,
+              profile: profile,
+            );
       }
       if (picked.isNotEmpty) setState(() => photos.addAll(picked));
     });
@@ -552,7 +558,9 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
                                 ),
                               if (busy)
                                 const LinearProgressIndicator(color: orange),
-                              if (production &&
+                              if (production && [8, 9].contains(id))
+                                const CatalogView()
+                              else if (production &&
                                   productionDataScreens.contains(id))
                                 LiveRecordsView(screenId: id)
                               else
@@ -670,20 +678,21 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
                                   label: const Text('Open camera scanner'),
                                 ),
                               if (id == 44) ...[
-                                ...flow.messages.map(
-                                  (m) => Align(
-                                    alignment: Alignment.centerRight,
-                                    child: box(
-                                      Text(
-                                        m,
-                                        style: const TextStyle(
-                                          color: Colors.white,
+                                if (!production)
+                                  ...flow.messages.map(
+                                    (m) => Align(
+                                      alignment: Alignment.centerRight,
+                                      child: box(
+                                        Text(
+                                          m,
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                          ),
                                         ),
+                                        color: orange,
                                       ),
-                                      color: orange,
                                     ),
                                   ),
-                                ),
                                 TextField(
                                   controller: controllers.putIfAbsent(
                                     'Message',
@@ -1784,7 +1793,7 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
       );
   void rowAction(String t) {
     if (id == 28) {
-      upload();
+      upload(profile: t.toLowerCase().contains('profile photo'));
       return;
     }
     if (t.contains('earnings') ||

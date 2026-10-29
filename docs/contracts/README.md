@@ -1,69 +1,47 @@
-# FIX ME ETHIOPIA shared contract v1
+# Shared Firestore contract v2 — Spark, no paid Firebase backend
 
-The Flutter customer/technician app and separately hosted admin dashboard use **one** Firebase project: `fixme-ethiopia`. The admin UI must use the callables here. Do not create another collection schema or write privileged state directly from an admin browser.
+The customer, technician and future admin UI share project `fixme-ethiopia`. Cloud Functions and Cloud Storage are **not used**. The client adapter batches transactions, and deployed Firestore security rules validate every write on the server. Admin tools run only under a trusted project-owner Firebase CLI session. No privileged credential ships in the app.
 
-## Identity and authorization
+## Identity
 
-Firebase Auth UID is the document ID for `users`, `customers`, `technicians`, and `technician_private`. `users` contains name, role (`customer | technician`), approval (`incomplete | pending | approved | rejected | suspended`), createdAt and optional profile map. Admin is exclusively a trusted custom claim `admin: true`, issued with Admin SDK outside the client. Neither UI may set admin claims. Technician approval, credentials, quotes, prices, and money status are server controlled. Timestamps in Firestore are Timestamp values; callable schedules use ISO 8601 UTC.
+`users/{uid}`: name, role (`customer | technician`), approval (`incomplete | pending | approved | rejected | suspended`), profileComplete bool, createdAt, updatedAt?, profile? map of Full name/Email/City/Address. Rules fix initial customer approval to approved and technician approval to incomplete. Roles and approvals cannot be freely updated. `customers/{uid}` and `technicians/{uid}` bootstrap atomically with the matching user. Admin is exclusively the trusted Firebase Auth custom claim `admin:true`; project-owner REST credentials bypass rules for local administration.
 
-## Collections
+`technicians/{uid}` contains public professional fields only: name, approval, skills string[] of catalog IDs, online bool, photoId?, rating?, approvedAt?. `technician_private/{uid}` contains profile, documents (image document IDs), submittedAt, badgeToken after trusted approval, and any genuine financial ledger data. No KYC images or full customer addresses belong in public technician records.
 
-- `customers/{uid}`: name, createdAt. Private account view.
-- `technicians/{uid}`: name, approval, skills string[], photoUrl?, online bool, rating?, createdAt. Public professional data only; no KYC or private customer addresses.
-- `technician_private/{uid}`: profile map, documents string[] of Storage paths, submittedAt, badgeToken?, availableBalance integer. Owner/admin only. Badge is issued only on approval.
-- `service_categories/{slug}`: name, active bool, visitFee nonnegative integer ETB. Admin must configure valid categories before accepting bookings. `refrigerator` is the initial client category key.
-- `service_areas/{slug}`: name, active bool, city, countryCode (`ET`).
-- `bookings/{autoId}`: customerId, technicianId nullable, categoryId, issue, scheduledAt, status, visitFee, createdAt; optional quoteId, quoteApprovedAt, approvedTotal, verifiedAt, verifiedCredentialId, completedAt.
-- `bookings/{id}/private/address`: customerId, address. Only booking participants/admin can read. Unassigned technicians cannot query bookings or see addresses.
-- `bookings/{id}/booking_events/{autoId}`: actorId, status, createdAt. Append-only, server-written.
-- `technician_credentials/{sha256(token)}`: technicianId, active bool, issuedAt. No direct client reads. Raw random badge token is stored privately for its owner. Revocation sets active false through trusted backend administration.
-- `qr_verifications/{autoId}`: bookingId, customerId, technicianId, credentialId, matched bool, createdAt.
-- `conversations/{bookingId}`: participants UID[], updatedAt; `messages/{autoId}`: senderId, text, createdAt.
-- `quotes/{autoId}`: bookingId, customerId, technicianId, visit, labor, parts, total (integer ETB), description, status, createdAt, approvedAt?.
-- `payments/{bookingId}`: bookingId, customerId, technicianId, amount, method (`cash`), status (`customer_reported | settled`), createdAt, settledAt?. Stable ID prevents duplicate settlement.
-- `payouts/{sha256(uid:idempotencyKey)}`: technicianId, amount integer ETB, status (`requested`), createdAt. Transaction reserves balance once. Actual disbursement requires a configured financial provider and a trusted settlement workflow.
-- `reviews/{bookingId}`: customerId, technicianId, rating integer 1–5, text, createdAt. One review per completed booking.
-- `notifications/{autoId}`: userId, title, body, createdAt, readAt?.
-- `users/{uid}/devices/{sha256(token)}`: token, updatedAt. Server-only push registration.
-- `complaints/{autoId}`: userId, bookingId?, description, status (`open`), createdAt.
-- `audit_logs/{autoId}`: action, actorId, technicianId?, createdAt. Admin-readable, server-written.
+## Services and bookings
 
-## Callable API (us-central1)
+`service_categories/{slug}`: name, active bool, visitFee integer ETB. `service_areas/{slug}`: name, city, countryCode, active. Only trusted admin writes catalog data. Categories initially use refrigerator/electrical/ac/satellite/plumbing/tv/washing/cctv/water-pump/computer/microwave/other.
 
-All endpoints require Firebase authentication and App Check. Admin callables additionally require the admin custom claim. Errors use `unauthenticated`, `permission-denied`, `invalid-argument`, and `failed-precondition`. The caller must surface errors; never simulate success after a failed call.
+`bookings/{id}`: customerId, technicianId nullable, categoryId, issue, scheduledAt Timestamp, status, visitFee, createdAt, updatedAt, lastEventId. Optional issuePhotos string[], verifiedAt, verifiedCredentialId, verificationId, quoteId, quoteApprovedAt, approvedTotal, completedAt, checklist map.
 
-- `createProfile({name,role}) -> {ok}`: creates once; only customer/technician accepted. Customer approved; technician incomplete.
-- `completeProfile({profile}) -> {ok}`: whitelists user-editable name/email/city/address fields. Does not alter role or approval.
-- `createBooking({categoryId,issue,address,scheduledAt,slot?}) -> {bookingId}`: approved customer; fee read from category, never from client. Initial status requested.
-- `assignTechnician({bookingId,technicianId}) -> {ok}`: admin; only approved technicians, requested/searching bookings.
-- `rejectBooking({bookingId}) -> {ok}`: assigned technician declines an assigned request; clears assignment and returns to searching.
-- `attachBookingPhotos({bookingId,paths}) -> {ok}`: owner, verifies owned Storage objects before adding issue photo paths.
-- `acceptBooking({bookingId}) -> {ok}`: assigned approved technician only.
-- `transitionBooking({bookingId,status}) -> {ok}`: actor-specific state graph; cannot set payment or verified status.
-- `verifyTechnician({bookingId,credential}) -> {matched,credentialId,name,photoUrl}`: assigned customer, arrived booking; active credential matches assigned approved technician. Comparison and booking transition are atomic. Static badges identify a credential and cannot prove physical identity. Customer must compare photo and person.
-- `submitTechnicianApplication({skills,profile,documents}) -> {ok}`: own incomplete/rejected application; at least two owned, uploaded KYC images. Sets pending.
-- `approveTechnician({technicianId}) -> {ok}`: admin; pending application; generates a cryptographically random credential.
-- `setAvailability({online}) -> {ok}`: approved technician.
-- `createQuote({bookingId,labor,parts,description}) -> {quoteId}`: assigned verified technician; server totals validated integer prices with catalog fee.
-- `approveQuote({bookingId}) -> {ok}`: customer only; approved total becomes immutable on booking.
-- `recordCashPayment({bookingId}) -> {ok,status:payment_pending}`: customer reports cash after confirming work. **Does not issue a paid receipt.**
-- `confirmCashReceived({bookingId}) -> {ok}`: assigned approved technician confirms cash and completes booking atomically. Cash is paid directly to technician; it does not create platform-held withdrawable funds.
-- `requestPayout({amount,idempotencyKey}) -> {ok}`: owner; transaction verifies and reserves withdrawable balance. No provider transfer is claimed.
-- `sendMessage({bookingId,text}) -> {ok}`: participant only, max 2,000 chars.
-- `registerPushToken({token}) -> {ok}`: own device registration.
-- `submitReview({bookingId,rating,text}) -> {ok}`: customer of completed booking, once.
-- `createComplaint({bookingId?,description}) -> {ticketId}`: authenticated support request.
+`bookings/{id}/private/address`: customerId, address. Only the customer, assigned technician and admin can read. `bookings/{id}/booking_events/{eventId}`: actorId, status, createdAt. Append-only. Status updates and their referenced event must be atomic.
 
-## State machine
+Customer creates requested booking, or assigned booking if an approved technician was explicitly chosen. Fee must equal the catalog fee. Assigned technician accepts or declines. Decline returns to searching and clears assignment. Trusted admin can assign an approved technician to requested/searching jobs.
 
-requested → searching → assigned → accepted → on_the_way → arrived → identity_verified → in_progress → quote_pending → in_progress → work_completed → customer_confirmed → payment_pending → completed.
+Status flow: requested/searching → assigned → accepted → on_the_way → arrived → identity_verified → in_progress → quote_pending → in_progress → work_completed → customer_confirmed → payment_pending → completed. Customer cancellation is restricted to pre-arrival states; active work supports dispute. Work cannot start without booking-specific verification or complete without an approved quotation.
 
-Admin assignment can move requested directly to assigned. Starting work requires verifiedAt. Completing work requires an approved quote. Customer cancels only requested/searching/assigned/accepted states. Active service can enter disputed. Terminal states cannot reopen. Client enum and backend policy must be changed together.
+## Badge verification
 
-## Storage
+`technician_credentials/{sha256(randomToken)}`: technicianId, active, issuedAt, revokedAt?. Only exact credential gets are allowed for authenticated users; listing/issuance/revocation are admin-only. A customer verification transaction reads the credential, approved technician and current booking; it creates `qr_verifications/{id}` and changes the same booking from arrived to identity_verified. Rules validate active credential ownership, customer identity, assignment, technician approval and both writes atomically. A locally decoded QR alone never grants verified status.
 
-KYC: `kyc/{uid}/{timestamp}.jpg`, owner/admin read only. Booking photos: `bookings/{bookingId}/{uid}/{timestamp}.jpg`, participant reads and owner creates. Profile photos: `profiles/{uid}/{file}`, authenticated reads. Only JPEG, PNG or WebP images under 10 MB; KYC/booking uploads cannot overwrite existing files.
+`qr_verifications/{id}`: bookingId, customerId, technicianId, credentialId, matched:true, createdAt. A rejected credential read or denied transition is a failed verification, never local success. Printed badges do not prove physical identity: the customer must compare the photo/person.
 
-## Admin deployment responsibilities
+## Quotes and cash
 
-Register genuine service categories/fees and service areas; create an admin custom claim from a trusted Admin SDK environment; review KYC before calling approveTechnician; assign technicians; configure credential revocation and payout reconciliation. This repository includes the callable backend, not an additional admin website. No admin service account or private key belongs in Flutter, Hosting JS, or version control.
+`quotes/{id}`: bookingId, customerId, technicianId, visit, labor, parts, total integer ETB, description, status (`pending | approved | rejected`), createdAt, respondedAt?. Quote creation and quote_pending status are atomic. Labor/parts are bounded nonnegative integers; visit equals booking/catalog fee; total is checked server-side. Customer response and return to in_progress are atomic.
+
+`payments/{bookingId}`: bookingId, customerId, technicianId, amount, method:cash, status (`customer_reported | settled`), createdAt, settledAt?. Customer report requires confirmed work and approved total. Assigned approved technician settlement and completed status are atomic. No gateway transaction or platform-held balance is simulated as real. Online gateway demo never writes a real settled payment.
+
+`reviews/{bookingId}`: customerId, technicianId, rating 1–5, text, createdAt; one customer review per completed booking.
+
+## Media, messaging, account
+
+`private_media/{id}`: ownerId, kind (`kyc | profile | booking`), bookingId (empty for non-booking), base64 compressed JPEG (max 400,000 encoded characters), createdAt. Uploads are immutable. KYC is owner/admin readable, booking images participant readable, professional profile images authenticated-readable. Media is deliberately small to respect Spark storage quotas.
+
+`conversations/{bookingId}`: participants exactly [customerId,technicianId], updatedAt. `messages/{id}`: senderId, text up to 2,000 chars, createdAt. Only participants may read/write. `complaints/{id}`: userId, bookingId, description, status:open, createdAt. Own user/admin read. `notifications/{id}`: userId, title/body, createdAt; admin writes. `users/{uid}/devices/{hash}`: device registration, updatedAt; owner read/write.
+
+`customers/{uid}/addresses/{id}`: label,address,updatedAt. `favorites/{technicianUid}`: createdAt. Owner-only. `audit_logs/{id}`: trusted administration records. `payouts` is reserved; cash is already paid directly to the technician and no online disbursement is implemented.
+
+## Deployment
+
+Deploy only `auth`/`firestore` configurations. Never provision Functions, Storage, paid map APIs, billing accounts or payment gateways for this version. For trusted local administration use `node tools/admin.cjs` under the project owner login. Review KYC before approval. The tool uses optimistic document preconditions for approval/assignment and cryptographically random badge tokens.

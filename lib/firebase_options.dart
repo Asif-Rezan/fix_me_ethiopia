@@ -36,6 +36,7 @@ class DefaultFirebaseOptions {
     projectId: "fixme-ethiopia",
     authDomain: "fixme-ethiopia.firebaseapp.com",
     storageBucket: "fixme-ethiopia.firebasestorage.app",
+    measurementId: "G-WE4TLD9QXH",
   );
   static const googleServerClientId =
       "64513607604-3vaen1m59k8r5cdrab0hb4c5jbgpldb7.apps.googleusercontent.com";

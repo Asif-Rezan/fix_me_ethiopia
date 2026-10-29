@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../../core/domain.dart';
+import '../../booking/data/firestore_commands.dart';
 import '../../../firebase_options.dart';
 import '../domain/auth_gateway.dart';
 
@@ -188,25 +188,29 @@ class FirebaseRepository implements ServiceRepository, AuthGateway {
       });
       return {'ok': true};
     }
-    final result = await FirebaseFunctions.instance
-        .httpsCallable(endpoint)
-        .call<Map<String, dynamic>>(data);
-    return result.data;
+    return FirestoreCommands(db, auth).execute(endpoint, data);
   }
 
   @override
   Future<VerificationResult> verify(String bookingId, String credential) async {
-    final data = await call('verifyTechnician', {
-      'bookingId': bookingId,
-      'credential': credential,
-    });
-    return VerificationResult(
-      matched: data['matched'] == true,
-      bookingId: bookingId,
-      technicianName: data['name'] as String?,
-      photoUrl: data['photoUrl'] as String?,
-      credentialId: data['credentialId'] as String?,
-    );
+    try {
+      final data = await call('verifyTechnician', {
+        'bookingId': bookingId,
+        'credential': credential,
+      });
+      return VerificationResult(
+        matched: data['matched'] == true,
+        bookingId: bookingId,
+        technicianName: data['name'] as String?,
+        photoUrl: data['photoUrl'] as String?,
+        credentialId: data['credentialId'] as String?,
+      );
+    } on FirebaseException catch (error) {
+      if (error.code == 'permission-denied' || error.code == 'not-found') {
+        return VerificationResult(matched: false, bookingId: bookingId);
+      }
+      rethrow;
+    }
   }
 
   @override

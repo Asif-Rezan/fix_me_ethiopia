@@ -71,7 +71,15 @@ RecordQuery queryForScreen(
       documentId: null,
     );
   }
-  if ([36, 40, 41].contains(id)) {
+  if (id == 40) {
+    return (
+      collection: 'payments',
+      ownerField: 'technicianId',
+      ownerId: uid,
+      documentId: null,
+    );
+  }
+  if ([36, 41].contains(id)) {
     return (
       collection: 'technician_private',
       ownerField: null,
@@ -129,12 +137,20 @@ final currentRecordsProvider = StreamProvider.autoDispose
     .family<List<AppRecord>, int>((ref, id) {
       final account = ref.watch(accountProvider).asData?.value;
       if (account == null) return Stream.value([]);
-      final query = queryForScreen(
-        id,
-        account.uid,
-        ref.watch(flowProvider).bookingId,
-        account.role.name == 'technician',
-      );
+      final query = id == 11
+          ? (
+              collection: 'technicians',
+              ownerField: null,
+              ownerId: null,
+              documentId:
+                  ref.watch(flowProvider).fields['technicianId'] ?? '__none__',
+            )
+          : queryForScreen(
+              id,
+              account.uid,
+              ref.watch(flowProvider).bookingId,
+              account.role.name == 'technician',
+            );
       return ref
           .watch(recordsRepositoryProvider)
           .watch(
