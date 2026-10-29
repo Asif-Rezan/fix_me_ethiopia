@@ -1,3 +1,9 @@
+# Current implementation update
+
+Normal builds now use real Firebase by default. Google and email/password providers are enabled. Native Google Sign-In uses the official SDK; the Android debug SHA-1/SHA-256 and iOS callback configuration are registered. Phone/SMS authentication has been removed. Visual tests opt into `--dart-define=USE_MOCKS=true`.
+
+Per the latest requirement, the backend is being migrated to free Firebase Auth + Firestore Spark, with no Cloud Functions, Cloud Storage or Blaze billing. The online payment gateway alone remains a labeled demo. The older setup sections below are superseded during this migration.
+
 # FIX ME ETHIOPIA
 
 One Flutter application for customer and technician journeys. Native Flutter views cover the 45 supplied references, with the official supplied artwork, Inter font, navy `#092B4D`, orange `#FF6410`, white and pale surfaces. Reference HTML is transformed into semantic content/layout specifications, rendered as reusable Flutter widgets; no HTML webview or screenshot is used as a screen.

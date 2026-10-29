@@ -15,6 +15,10 @@ String? roleRedirect({
       account.approval == Approval.rejected) {
     return screen == 29 ? null : '/screen/29';
   }
+  if (screen <= 4) return '/screen/${account.home}';
+  if (screen == 6 && account.approval != Approval.incomplete) {
+    return '/screen/${account.home}';
+  }
   if (account.role == AccountRole.customer) {
     if (account.approval == Approval.incomplete && screen > 6) {
       return '/screen/6';

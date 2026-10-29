@@ -89,15 +89,6 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
       controllers[label]?.text.trim() ?? flow.fields[label] ?? '';
   Future<void> action(String text) async {
     final label = text.replaceAll('→', '').trim();
-    if (id == 5 && label.contains('Verify')) {
-      await run(() async {
-        await ref
-            .read(authViewModelProvider.notifier)
-            .confirmCode(value('OTP'));
-        if (mounted) go(6);
-      });
-      return;
-    }
     if (label.contains('Sign in')) {
       setState(() => signingIn = true);
       return;
@@ -609,15 +600,6 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
                                     child: const Text('Continue with Apple'),
                                   ),
                                 TextButton(
-                                  onPressed: () => run(() async {
-                                    await ref
-                                        .read(authViewModelProvider.notifier)
-                                        .sendCode(value('Phone number'));
-                                    if (mounted) go(5);
-                                  }),
-                                  child: const Text('Sign in with phone'),
-                                ),
-                                TextButton(
                                   onPressed: () =>
                                       setState(() => signingIn = !signingIn),
                                   child: Text(
@@ -784,7 +766,7 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
             const ListTile(
               title: Text('Design preview • all 45 native screens'),
             ),
-            for (final s in all)
+            for (final s in all.where((entry) => entry['id'] != 5))
               ListTile(
                 title: Text(
                   '${s['id']}. ${s['name'].toString().replaceAll('_', ' ')}',

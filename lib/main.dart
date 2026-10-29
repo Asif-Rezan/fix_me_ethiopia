@@ -11,8 +11,10 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'core/state.dart';
+import 'firebase_options.dart';
 import 'core/domain.dart';
 import 'features/auth/domain/role_policy.dart';
+import 'features/auth/presentation/auth_view.dart';
 import 'features/booking/presentation/verification_view_model.dart';
 import 'features/technician/presentation/media_view_model.dart';
 import 'features/notifications/presentation/notifications_view_model.dart';
@@ -24,18 +26,22 @@ Future<void> main() async {
   if (production) {
     try {
       await Firebase.initializeApp(
-        options: const FirebaseOptions(
-          apiKey: String.fromEnvironment('FIREBASE_API_KEY'),
-          appId: String.fromEnvironment('FIREBASE_APP_ID'),
-          messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID'),
-          projectId: String.fromEnvironment(
-            'FIREBASE_PROJECT_ID',
-            defaultValue: 'fixme-ethiopia',
-          ),
-          authDomain: 'fixme-ethiopia.firebaseapp.com',
-          storageBucket: String.fromEnvironment('FIREBASE_STORAGE_BUCKET'),
-          iosBundleId: 'et.fixme.app',
-        ),
+        options: const String.fromEnvironment('FIREBASE_API_KEY').isEmpty
+            ? DefaultFirebaseOptions.currentPlatform
+            : const FirebaseOptions(
+                apiKey: String.fromEnvironment('FIREBASE_API_KEY'),
+                appId: String.fromEnvironment('FIREBASE_APP_ID'),
+                messagingSenderId: String.fromEnvironment('FIREBASE_SENDER_ID'),
+                projectId: String.fromEnvironment(
+                  'FIREBASE_PROJECT_ID',
+                  defaultValue: 'fixme-ethiopia',
+                ),
+                storageBucket: String.fromEnvironment(
+                  'FIREBASE_STORAGE_BUCKET',
+                ),
+                authDomain: 'fixme-ethiopia.firebaseapp.com',
+                iosBundleId: 'et.fixme.app',
+              ),
       );
       const emulators = bool.fromEnvironment('USE_EMULATORS');
       if (emulators) {
@@ -83,6 +89,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/screen/1',
     refreshListenable: refresh,
     redirect: (_, state) {
+      if (state.pathParameters['id'] == '5') return '/screen/4';
       if (!production) return null;
       final id = int.tryParse(state.pathParameters['id'] ?? '1') ?? 1;
       final account = ref.read(accountProvider);
@@ -97,6 +104,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/screen/:id',
         builder: (_, state) {
           final id = int.tryParse(state.pathParameters['id'] ?? '1') ?? 1;
+          if (id == 4) return const AuthView();
           return ReferenceScreen(key: ValueKey(id), id: id.clamp(1, 45));
         },
       ),

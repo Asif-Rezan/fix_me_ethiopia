@@ -6,9 +6,42 @@ service cloud.firestore {
   function admin() { return signed() && request.auth.token.admin == true; }
   function party(data) { return signed() && (data.customerId == request.auth.uid || data.technicianId == request.auth.uid); }
   function bookingParty(id) { return party(get(/databases/$(database)/documents/bookings/$(id)).data); }
-  match /users/{id} { allow read: if self(id) || admin(); allow write: if false; }
-  match /customers/{id} { allow read: if self(id) || admin(); allow write: if false; }
-  match /technicians/{id} { allow read: if signed() && (resource.data.approval == 'approved' || self(id) || admin()); allow write: if false; }
+  match /users/{id} {
+   allow read: if self(id) || admin();
+   // Users may choose a customer/technician account once. Rules fix approval;
+   // there is no client-writable admin role or technician approval path.
+   allow create: if self(id)
+     && request.resource.data.keys().hasOnly(['name','role','approval','profileComplete','createdAt'])
+     && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+     && request.resource.data.role in ['customer','technician']
+     && request.resource.data.approval == (request.resource.data.role == 'customer' ? 'approved' : 'incomplete')
+     && request.resource.data.profileComplete == false
+     && request.resource.data.createdAt == request.time;
+   allow update: if self(id)
+     && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','profile','profileComplete','updatedAt'])
+     && request.resource.data.name is string && request.resource.data.name.size() > 0 && request.resource.data.name.size() <= 120
+     && request.resource.data.profile is map
+     && request.resource.data.profile.keys().hasOnly(['Full name','Email','City','Address'])
+     && request.resource.data.profileComplete == true
+     && request.resource.data.updatedAt == request.time;
+   allow delete: if false;
+  }
+  match /customers/{id} {
+   allow read: if self(id) || admin();
+   allow create: if self(id) && getAfter(/databases/$(database)/documents/users/$(id)).data.role == 'customer'
+     && request.resource.data.keys().hasOnly(['name','approval','online','createdAt'])
+     && request.resource.data.name == getAfter(/databases/$(database)/documents/users/$(id)).data.name
+     && request.resource.data.approval == 'approved' && request.resource.data.online == false && request.resource.data.createdAt == request.time;
+   allow update,delete: if false;
+  }
+  match /technicians/{id} {
+   allow read: if signed() && (resource.data.approval == 'approved' || self(id) || admin());
+   allow create: if self(id) && getAfter(/databases/$(database)/documents/users/$(id)).data.role == 'technician'
+     && request.resource.data.keys().hasOnly(['name','approval','online','createdAt'])
+     && request.resource.data.name == getAfter(/databases/$(database)/documents/users/$(id)).data.name
+     && request.resource.data.approval == 'incomplete' && request.resource.data.online == false && request.resource.data.createdAt == request.time;
+   allow update,delete: if false;
+  }
   match /technician_private/{id} { allow read: if self(id) || admin(); allow write: if false; }
   match /service_categories/{id} { allow read: if true; allow write: if false; }
   match /service_areas/{id} { allow read: if true; allow write: if false; }

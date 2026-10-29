@@ -50,30 +50,6 @@ class AuthViewModel extends AsyncNotifier<void> {
           ));
   }
 
-  Future<void> sendCode(String phone) async {
-    final repo = ref.read(repositoryProvider);
-    if (repo is! AuthGateway) {
-      throw StateError('Phone SMS is unavailable in demo mode.');
-    }
-    if (!RegExp(r'^\+[1-9][0-9]{7,14}$').hasMatch(phone)) {
-      throw ArgumentError(
-        'Use an international phone number, for example +251911234567.',
-      );
-    }
-    await (repo as AuthGateway).sendPhoneCode(phone);
-  }
-
-  Future<void> confirmCode(String code) async {
-    final repo = ref.read(repositoryProvider);
-    if (repo is! AuthGateway) {
-      throw StateError('Demo does not send or verify SMS.');
-    }
-    await (repo as AuthGateway).confirmPhoneCode(
-      code,
-      ref.read(flowProvider).role.name,
-    );
-  }
-
   Future<void> completeProfile() => ref
       .read(repositoryProvider)
       .call('completeProfile', {'profile': ref.read(flowProvider).fields})

@@ -2,7 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../data/repositories.dart';
 import 'domain.dart';
 
-const production = bool.fromEnvironment('PRODUCTION');
+const production = !bool.fromEnvironment('USE_MOCKS', defaultValue: false);
 final repositoryProvider = Provider<ServiceRepository>(
   (ref) => production ? FirebaseRepository() : DemoRepository(),
 );
