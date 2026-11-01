@@ -1,6 +1,8 @@
 import '../../core/errors/user_message.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../notifications/presentation/notification_center_view.dart';
+import '../support/presentation/support_center_view.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -41,8 +43,13 @@ List<Map<String, dynamic>> children(Map<String, dynamic> n) =>
         .toList();
 
 class ReferenceScreen extends ConsumerStatefulWidget {
-  const ReferenceScreen({super.key, required this.id});
+  const ReferenceScreen({
+    super.key,
+    required this.id,
+    this.showBottomNav = true,
+  });
   final int id;
+  final bool showBottomNav;
   @override
   ConsumerState<ReferenceScreen> createState() => _ReferenceScreenState();
 }
@@ -391,7 +398,7 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
   }
 
   Future<void> scan() async {
-    if (!production) {
+    if (!production || ref.read(demoModeProvider)) {
       final c = TextEditingController(text: 'DEMO-FIXME-00002');
       final code = await showDialog<String>(
         context: context,
@@ -457,17 +464,6 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
                 final screen = Map<String, dynamic>.from(all[id - 1] as Map);
                 return Column(
                   children: [
-                    if (!production)
-                      Container(
-                        width: double.infinity,
-                        color: const Color(0xFFFFF2E7),
-                        padding: const EdgeInsets.symmetric(vertical: 4),
-                        child: const Text(
-                          'DEMO • sample data • no real payments or identity checks',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 9, color: navy),
-                        ),
-                      ),
                     if (id != 1)
                       Container(
                         height: 49,
@@ -492,9 +488,25 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
                             IconButton(
                               tooltip: 'Notifications',
                               onPressed: () => go(24),
-                              icon: const Icon(
-                                Icons.notifications_none_rounded,
-                                size: 19,
+                              icon: Badge(
+                                isLabelVisible:
+                                    (ref
+                                            .watch(notificationFeedProvider)
+                                            .asData
+                                            ?.value
+                                            .where(
+                                              (r) => r.values['readAt'] == null,
+                                            )
+                                            .length ??
+                                        0) >
+                                    0,
+                                label: Text(
+                                  '${ref.watch(notificationFeedProvider).asData?.value.where((r) => r.values['readAt'] == null).length ?? 0}',
+                                ),
+                                child: const Icon(
+                                  Icons.notifications_none_rounded,
+                                  size: 19,
+                                ),
                               ),
                             ),
                             PopupMenuButton<String>(
@@ -505,7 +517,22 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
                                       .read(authViewModelProvider.notifier)
                                       .logout();
                                   ref.read(flowProvider.notifier).clear();
+                                  ref
+                                      .read(demoModeProvider.notifier)
+                                      .set(false);
                                   if (context.mounted) context.go('/screen/3');
+                                } else if (v == 'switch-demo') {
+                                  final role = flow.role == AccountRole.customer
+                                      ? AccountRole.technician
+                                      : AccountRole.customer;
+                                  ref.read(demoRepositoryProvider).enter(role);
+                                  ref.invalidate(accountProvider);
+                                  await ref.read(accountProvider.future);
+                                  if (context.mounted) {
+                                    context.go(
+                                      '/screen/${role == AccountRole.customer ? 7 : 30}',
+                                    );
+                                  }
                                 } else if (v == 'preview') {
                                   showGallery(all);
                                 } else if (v == 'demo') {
@@ -528,6 +555,11 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
                                   const PopupMenuItem(
                                     value: 'demo',
                                     child: Text('Preview technician account'),
+                                  ),
+                                if (ref.watch(demoModeProvider))
+                                  const PopupMenuItem(
+                                    value: 'switch-demo',
+                                    child: Text('Switch demo role'),
                                   ),
                                 const PopupMenuItem(
                                   value: 'logout',
@@ -562,14 +594,16 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
                                 ),
                               if (busy)
                                 const LinearProgressIndicator(color: orange),
-                              if (production && [8, 9].contains(id))
+                              if (production && id == 45)
+                                const SupportCenterView()
+                              else if (production && [8, 9].contains(id))
                                 const CatalogView()
                               else if (production &&
                                   productionDataScreens.contains(id))
                                 LiveRecordsView(screenId: id)
                               else
                                 ...children(screen).map(render),
-                              if (id == 24)
+                              if (id == 24 && !ref.watch(demoModeProvider))
                                 TextButton.icon(
                                   onPressed: () => run(() async {
                                     await ref
@@ -681,7 +715,7 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
                                   icon: const Icon(Icons.qr_code_scanner),
                                   label: const Text('Open camera scanner'),
                                 ),
-                              if (id == 44) ...[
+                              if (id == 44 && !production) ...[
                                 if (!production)
                                   ...flow.messages.map(
                                     (m) => Align(
@@ -721,7 +755,7 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
                                   ),
                                 ),
                               ],
-                              if (id == 45)
+                              if (id == 45 && !production)
                                 TextField(
                                   controller: controllers.putIfAbsent(
                                     'Support message',
@@ -755,7 +789,8 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
                         ),
                       ),
                     ),
-                    if (screen['nav'] == true) bottomNav(),
+                    if (widget.showBottomNav && screen['nav'] == true)
+                      bottomNav(),
                   ],
                 );
               },
@@ -826,7 +861,7 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
           5,
           (i) => Expanded(
             child: InkWell(
-              onTap: () => go(targets[i]),
+              onTap: () => context.go('/screen/${targets[i]}'),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -918,7 +953,7 @@ class _ReferenceScreenState extends ConsumerState<ReferenceScreen> {
         children: [
           const SizedBox(height: 70),
           Image.asset(
-            'assets/brand/logo.jpeg',
+            'assets/brand/launcher_icon.png',
             width: 220,
             height: 210,
             fit: BoxFit.contain,

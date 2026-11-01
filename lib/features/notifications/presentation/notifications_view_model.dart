@@ -16,7 +16,7 @@ class NotificationsViewModel extends AsyncNotifier<void> {
   }
 
   Future<void> enable() async {
-    if (!production) {
+    if (!production || ref.read(demoModeProvider)) {
       throw StateError('Push delivery is unavailable in demo mode.');
     }
     state = const AsyncLoading();

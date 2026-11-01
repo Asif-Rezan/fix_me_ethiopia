@@ -1,5 +1,6 @@
 import '../../../core/errors/user_message.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +8,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/state.dart';
 import '../../../core/presentation/stored_image.dart';
 import 'records_view_model.dart';
+import 'section_workspace_view.dart';
 import 'booking_view_model.dart';
 import 'verification_view_model.dart';
 import 'quote_details_view.dart';
@@ -19,6 +21,9 @@ class LiveRecordsView extends ConsumerWidget {
   final int screenId;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (workspaceScreens.contains(screenId)) {
+      return SectionWorkspaceView(screenId: screenId);
+    }
     final account = ref.watch(accountProvider).asData?.value;
     final records = ref.watch(currentRecordsProvider(screenId));
     final booking = ref.watch(flowProvider).bookingId;
@@ -67,25 +72,49 @@ class LiveRecordsView extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (screenId == 7 || screenId == 30) ...[
-          Text(
-            'Hello, ${account?.name ?? ''}',
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: () => go(screenId == 7 ? 8 : 32),
-            child: Text(
-              screenId == 7 ? 'Find a repair service' : 'View my jobs',
-            ),
-          ),
-        ],
+        Text(
+          const {
+                10: 'Find a professional',
+                11: 'Technician profile',
+                16: 'Your service',
+                17: 'Service location',
+                20: 'Review quotation',
+                21: 'Payment',
+                22: 'Service receipt',
+                29: 'Application progress',
+                33: 'Job details',
+                34: 'Service directions',
+                35: 'Arrival & verification',
+                36: 'My technician ID',
+                37: 'Work progress',
+                39: 'Service completion',
+              }[screenId] ??
+              'Service details',
+          style: const TextStyle(fontSize: 25, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 18),
         if ([17, 34].contains(screenId))
           const Card(
             child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Text(
-                'Live map requires a configured map and location provider. Your booking address appears below.',
+              padding: EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.route_outlined,
+                    size: 64,
+                    color: Color(0xFF319DC3),
+                  ),
+                  SizedBox(height: 12),
+                  Text(
+                    'Directions to your service',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(height: 8),
+                  Text(
+                    'Open the service address in your map app for directions.',
+                    textAlign: TextAlign.center,
+                  ),
+                ],
               ),
             ),
           ),
@@ -118,9 +147,17 @@ class LiveRecordsView extends ConsumerWidget {
           ),
           data: (rows) {
             if (rows.isEmpty) {
-              return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 32),
-                child: Text('Nothing here yet. Your updates will appear here.'),
+              return Column(
+                children: [
+                  const Icon(Icons.calendar_month_outlined, size: 56),
+                  const SizedBox(height: 16),
+                  const Text('Choose a service to view its details.'),
+                  TextButton(
+                    onPressed: () =>
+                        go(account?.role == AccountRole.technician ? 32 : 23),
+                    child: const Text('Choose booking'),
+                  ),
+                ],
               );
             }
             final filtered = screenId == 10
@@ -177,16 +214,25 @@ class LiveRecordsView extends ConsumerWidget {
                                 canRespond:
                                     account?.role == AccountRole.customer,
                               ),
-                            if (screenId == 11)
-                              TextButton.icon(
-                                onPressed: () => command(
-                                  () => ref
-                                      .read(accountViewModelProvider.notifier)
-                                      .favorite(row.id, true),
-                                ),
-                                icon: const Icon(Icons.favorite_border),
-                                label: const Text('Save favorite'),
+                            if ([10, 11].contains(screenId)) ...[
+                              Text(
+                                '${row.text('rating', 'New')} ★ · ${row.text('completedJobs', '0')} repairs · ${row.text('area', 'Addis Ababa')}',
                               ),
+                              if (screenId == 11) ...[
+                                const SizedBox(height: 12),
+                                Text(
+                                  row.text(
+                                    'bio',
+                                    'Approved repair professional.',
+                                  ),
+                                ),
+                                Text(
+                                  'Experience: ${row.text('experience', 'Contact for details')}',
+                                ),
+                              ],
+                            ],
+                            if (screenId == 11)
+                              FavoriteTechnicianButton(technicianId: row.id),
                             if (screenId == 36 &&
                                 row.text('badgeToken').isNotEmpty) ...[
                               QrImageView(
@@ -275,7 +321,14 @@ class LiveRecordsView extends ConsumerWidget {
                                         .task(task.key, value ?? false),
                                   ),
                                 ),
-                            if ([16, 33, 37].contains(screenId)) ...[
+                            if ([
+                              16,
+                              21,
+                              33,
+                              35,
+                              37,
+                              39,
+                            ].contains(screenId)) ...[
                               if (row.text('status') == 'assigned' &&
                                   account?.role == AccountRole.technician) ...[
                                 FilledButton(
@@ -400,14 +453,87 @@ class LiveRecordsView extends ConsumerWidget {
                             ],
                             if ([16, 33, 34].contains(screenId))
                               BookingAddress(bookingId: row.id),
-                            if ([16, 33, 37].contains(screenId))
+                            if ([16, 21, 33, 35, 37, 39].contains(screenId))
                               for (final photo
                                   in row.values['issuePhotos'] as List? ?? [])
                                 StoredImage(id: photo as String),
-                            if (screenId == 22)
-                              const Text(
-                                'Your receipt is ready after your technician confirms receiving payment.',
+                            if ([16, 33].contains(screenId)) ...[
+                              Wrap(
+                                spacing: 8,
+                                children: [
+                                  OutlinedButton.icon(
+                                    onPressed: () => go(
+                                      account?.role == AccountRole.technician
+                                          ? 34
+                                          : 17,
+                                    ),
+                                    icon: const Icon(Icons.map_outlined),
+                                    label: const Text('Directions'),
+                                  ),
+                                  if (row.text('quoteId').isNotEmpty &&
+                                      account?.role == AccountRole.customer)
+                                    OutlinedButton(
+                                      onPressed: () => go(20),
+                                      child: const Text('Quotation'),
+                                    ),
+                                  if (account?.role == AccountRole.customer)
+                                    OutlinedButton(
+                                      onPressed: () => go(21),
+                                      child: const Text('Payment details'),
+                                    ),
+                                  if (row.text('status') == 'completed' &&
+                                      account?.role == AccountRole.customer)
+                                    OutlinedButton(
+                                      onPressed: () => go(22),
+                                      child: const Text('View receipt'),
+                                    ),
+                                ],
                               ),
+                            ],
+                            if (screenId == 22) ...[
+                              const Divider(height: 28),
+                              Text(
+                                row.text('status') == 'completed'
+                                    ? 'Cash receipt confirmed'
+                                    : 'Payment awaiting confirmation',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text('Service reference: ${row.id}'),
+                              Text(
+                                'Visit fee: ETB ${row.text('visitFee', '300')}',
+                              ),
+                              Text(
+                                'Total: ETB ${row.text('approvedTotal', row.text('visitFee', '300'))}',
+                              ),
+                              if (row.text('status') == 'completed')
+                                OutlinedButton.icon(
+                                  onPressed: () async {
+                                    await Clipboard.setData(
+                                      ClipboardData(
+                                        text:
+                                            'FIX ME ETHIOPIA${ref.read(demoModeProvider) ? ' · DEMO RECEIPT' : ''}\nService: ${row.id}\nTotal: ETB ${row.text('approvedTotal', row.text('visitFee'))}\nCash received by technician.',
+                                      ),
+                                    );
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Receipt copied'),
+                                        ),
+                                      );
+                                    }
+                                  },
+                                  icon: const Icon(Icons.copy_outlined),
+                                  label: const Text('Copy receipt'),
+                                ),
+                            ],
+                            if (row.text('status') == 'completed' &&
+                                account?.role == AccountRole.customer &&
+                                [16, 22].contains(screenId))
+                              const ReviewComposer(),
                           ],
                         ),
                       ),
@@ -486,6 +612,142 @@ class BookingAddress extends ConsumerWidget {
                 ),
               ),
             ),
+    );
+  }
+}
+
+class ReviewComposer extends ConsumerStatefulWidget {
+  const ReviewComposer({super.key});
+  @override
+  ConsumerState<ReviewComposer> createState() => _ReviewComposerState();
+}
+
+class _ReviewComposerState extends ConsumerState<ReviewComposer> {
+  final text = TextEditingController();
+  int rating = 5;
+  bool busy = false, saved = false;
+  @override
+  void dispose() {
+    text.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => saved
+      ? const Padding(
+          padding: EdgeInsets.all(16),
+          child: Text('Thank you for sharing your review!'),
+        )
+      : Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Divider(height: 28),
+            const Text(
+              'How was your service?',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            Row(
+              children: [
+                for (var i = 1; i <= 5; i++)
+                  IconButton(
+                    tooltip: '$i stars',
+                    onPressed: () => setState(() => rating = i),
+                    icon: Icon(
+                      i <= rating ? Icons.star : Icons.star_border,
+                      color: Colors.orange,
+                    ),
+                  ),
+              ],
+            ),
+            TextField(
+              controller: text,
+              maxLines: 3,
+              maxLength: 2000,
+              decoration: const InputDecoration(
+                hintText: 'Tell us about your repair experience',
+              ),
+            ),
+            FilledButton(
+              onPressed: busy
+                  ? null
+                  : () async {
+                      if (text.text.trim().length < 5) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Add a few words about your service.',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                      setState(() => busy = true);
+                      try {
+                        await ref
+                            .read(bookingViewModelProvider.notifier)
+                            .review(rating, text.text.trim());
+                        if (mounted) setState(() => saved = true);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(userMessage(e))),
+                          );
+                        }
+                      } finally {
+                        if (mounted) setState(() => busy = false);
+                      }
+                    },
+              child: const Text('Submit review'),
+            ),
+          ],
+        );
+}
+
+class FavoriteTechnicianButton extends ConsumerStatefulWidget {
+  const FavoriteTechnicianButton({super.key, required this.technicianId});
+  final String technicianId;
+  @override
+  ConsumerState<FavoriteTechnicianButton> createState() =>
+      _FavoriteTechnicianButtonState();
+}
+
+class _FavoriteTechnicianButtonState
+    extends ConsumerState<FavoriteTechnicianButton> {
+  bool busy = false;
+  @override
+  Widget build(BuildContext context) {
+    final uid = ref.watch(accountProvider).asData?.value?.uid;
+    if (uid == null) return const SizedBox.shrink();
+    final favorite = ref.watch(
+      recordsViewModelProvider((
+        collection: 'customers/$uid/favorites',
+        ownerField: null,
+        ownerId: null,
+        documentId: widget.technicianId,
+      )),
+    );
+    final saved = favorite.asData?.value.isNotEmpty ?? false;
+    return TextButton.icon(
+      onPressed: busy || favorite.isLoading
+          ? null
+          : () async {
+              setState(() => busy = true);
+              try {
+                await ref
+                    .read(accountViewModelProvider.notifier)
+                    .favorite(widget.technicianId, !saved);
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(userMessage(e))));
+                }
+              } finally {
+                if (mounted) setState(() => busy = false);
+              }
+            },
+      icon: Icon(saved ? Icons.favorite : Icons.favorite_border),
+      label: Text(saved ? 'Saved · tap to remove' : 'Save favorite'),
     );
   }
 }

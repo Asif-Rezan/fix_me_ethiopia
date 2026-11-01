@@ -7,6 +7,7 @@ import '../../../core/domain.dart';
 import '../../booking/data/firestore_commands.dart';
 import '../../../firebase_options.dart';
 import '../domain/auth_gateway.dart';
+import '../../messaging/data/realtime_repository.dart';
 
 class FirebaseRepository implements ServiceRepository, AuthGateway {
   FirebaseAuth get auth => FirebaseAuth.instance;
@@ -169,6 +170,16 @@ class FirebaseRepository implements ServiceRepository, AuthGateway {
     String endpoint,
     Map<String, dynamic> data,
   ) async {
+    if ({
+      'sendMessage',
+      'markConversationRead',
+      'setTyping',
+      'setChatPresence',
+      'markNotificationRead',
+      'markAllNotificationsRead',
+    }.contains(endpoint)) {
+      return RealtimeRepository().command(endpoint, data);
+    }
     if (endpoint == 'completeProfile') {
       final user = auth.currentUser;
       if (user == null) throw StateError('Sign in first.');

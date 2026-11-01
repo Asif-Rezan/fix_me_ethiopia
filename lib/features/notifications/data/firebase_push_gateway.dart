@@ -6,9 +6,7 @@ class FirebasePushGateway implements PushGateway {
   Future<String?> requestToken() async {
     final settings = await FirebaseMessaging.instance.requestPermission();
     if (settings.authorizationStatus == AuthorizationStatus.denied) {
-      throw StateError(
-        'Please enable notifications in your phone settings.',
-      );
+      throw StateError('Please enable notifications in your phone settings.');
     }
     final registered = FirebaseMessaging.instance.onRegistered.first.timeout(
       const Duration(seconds: 30),

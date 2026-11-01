@@ -23,14 +23,14 @@ String? roleRedirect({
     if (account.approval == Approval.incomplete && screen > 6) {
       return '/screen/6';
     }
-    if (screen >= 26 && screen <= 43) {
+    if (screen >= 26 && screen <= 43 && screen != 42) {
       return '/screen/7';
     }
   } else {
     if (account.approval != Approval.approved && screen >= 30 && screen <= 43) {
       return '/screen/${account.home}';
     }
-    if (screen >= 7 && screen <= 25) {
+    if (screen >= 7 && screen <= 25 && screen != 24) {
       return '/screen/${account.home}';
     }
   }

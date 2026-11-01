@@ -19,7 +19,7 @@ class MediaViewModel extends Notifier<List<String>> {
     bool profile = false,
   }) async {
     final uid = ref.read(accountProvider).asData?.value?.uid;
-    if (!production) {
+    if (!production || ref.read(demoModeProvider)) {
       state = [...state, 'demo-image-${state.length}'];
       return;
     }
@@ -43,7 +43,7 @@ class MediaViewModel extends Notifier<List<String>> {
   }
 
   Future<void> flushBookingPhotos() async {
-    if (_pending.isEmpty || !production) return;
+    if (_pending.isEmpty || !production || ref.read(demoModeProvider)) return;
     final queued = [..._pending];
     _pending.clear();
     state = [];

@@ -12,6 +12,9 @@
     },
     "ui": {
       "enabled": true
+    },
+    "database": {
+      "port": 9000
     }
   },
   "auth": {
@@ -27,5 +30,8 @@
         ]
       }
     }
+  },
+  "database": {
+    "rules": "database.rules.json"
   }
 }

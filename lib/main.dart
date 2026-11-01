@@ -7,6 +7,8 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'features/messaging/data/realtime_repository.dart';
+import 'features/notifications/presentation/push_navigation.dart';
 import 'core/state.dart';
 import 'core/telemetry/telemetry.dart';
 import 'firebase_options.dart';
@@ -17,6 +19,8 @@ import 'features/booking/presentation/verification_view_model.dart';
 import 'features/technician/presentation/media_view_model.dart';
 import 'features/notifications/presentation/notifications_view_model.dart';
 import 'features/screens/reference_screen.dart';
+import 'features/screens/app_tab_shell.dart';
+import 'features/messaging/presentation/realtime_chat_view.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,11 +58,15 @@ Future<void> main() async {
         );
         await FirebaseAuth.instance.useAuthEmulator(host, 9099);
         FirebaseFirestore.instance.useFirestoreEmulator(host, 8080);
+        RealtimeRepository.database.useDatabaseEmulator(host, 9000);
       }
       if (!kIsWeb && !emulators) {
         await FirebaseAppCheck.instance.activate();
       }
     } catch (e) {
+      debugPrint(
+        'App startup failed: ${e is FirebaseException ? '${e.plugin}/${e.code}' : e.runtimeType}',
+      );
       startupError =
           'We couldn’t start the app. Please reopen it. If this continues, contact support.';
     }
@@ -87,7 +95,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (_, state) {
       if (state.pathParameters['id'] == '5') return '/screen/4';
       if (!production) return null;
-      final id = int.tryParse(state.pathParameters['id'] ?? '1') ?? 1;
+      final id = int.tryParse(state.uri.pathSegments.lastOrNull ?? '1') ?? 1;
       final account = ref.read(accountProvider);
       return roleRedirect(
         screen: id,
@@ -96,6 +104,27 @@ final routerProvider = Provider<GoRouter>((ref) {
       );
     },
     routes: [
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigation) =>
+            AppTabShell(navigation: navigation),
+        branches: [
+          for (final tab in [7, 23, 8, 44, 25, 30, 32, 36, 40, 43])
+            StatefulShellBranch(
+              routes: [
+                GoRoute(
+                  path: '/screen/$tab',
+                  builder: (context, state) => tab == 44 && production
+                      ? const ChatScreen()
+                      : ReferenceScreen(
+                          key: ValueKey(tab),
+                          id: tab,
+                          showBottomNav: false,
+                        ),
+                ),
+              ],
+            ),
+        ],
+      ),
       GoRoute(
         path: '/screen/:id',
         pageBuilder: (_, state) {
@@ -160,7 +189,7 @@ class FixMeApp extends ConsumerWidget {
     ),
     routerConfig: ref.watch(routerProvider),
     builder: (context, child) => startupError == null
-        ? child!
+        ? PushNavigation(router: ref.watch(routerProvider), child: child!)
         : Scaffold(
             body: SafeArea(
               child: Center(

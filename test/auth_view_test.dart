@@ -115,8 +115,10 @@ void main() {
       find.byType(TextFormField).at(1),
       'existing-password',
     );
-    await tester.ensureVisible(find.text('Sign in'));
-    await tester.tap(find.text('Sign in'));
+    final submit = find.widgetWithText(FilledButton, 'Sign in');
+    await tester.ensureVisible(submit);
+    await tester.pumpAndSettle();
+    await tester.tap(submit);
     await tester.pumpAndSettle();
     expect(auth.email, 'user@example.com');
     expect(find.text('Authenticated profile'), findsOneWidget);

@@ -1,0 +1,91 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      "$room": {
+        ".read": "auth != null && root.child('rooms').child($room).child('members').child(auth.uid).val() == true",
+        "messages": {
+          ".indexOn": [
+            "createdAt"
+          ],
+          "$message": {
+            ".write": "auth != null && root.child('rooms').child($room).child('members').child(auth.uid).val() == true && !data.exists() && newData.exists()",
+            ".validate": "newData.hasChildren(['senderId','text','createdAt'])",
+            "senderId": {
+              ".validate": "newData.val() == auth.uid"
+            },
+            "text": {
+              ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 2000"
+            },
+            "createdAt": {
+              ".validate": "newData.isNumber() && newData.val() == now"
+            },
+            "$other": {
+              ".validate": false
+            }
+          }
+        },
+        "reads": {
+          "$uid": {
+            ".write": "auth != null && root.child('rooms').child($room).child('members').child(auth.uid).val() == true && auth.uid == $uid",
+            ".validate": "newData.isNumber() && newData.val() <= now && (!data.exists() || newData.val() >= data.val())"
+          }
+        },
+        "typing": {
+          "$uid": {
+            ".write": "auth != null && root.child('rooms').child($room).child('members').child(auth.uid).val() == true && auth.uid == $uid",
+            ".validate": "newData.isNumber() && newData.val() == now"
+          }
+        },
+        "presence": {
+          "$uid": {
+            ".write": "auth != null && root.child('rooms').child($room).child('members').child(auth.uid).val() == true && auth.uid == $uid",
+            ".validate": "newData.val() == true"
+          }
+        }
+      }
+    },
+    "notifications": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".indexOn": [
+          "createdAt",
+          "bookingId"
+        ],
+        "$notification": {
+          ".write": "auth != null && auth.uid != $uid && !data.exists() && newData.exists() && newData.child('type').val() == 'chat' && $notification == 'chat-' + newData.child('messageId').val() && root.child('rooms').child(newData.child('bookingId').val()).child('members').child(auth.uid).val() == true && root.child('rooms').child(newData.child('bookingId').val()).child('members').child($uid).val() == true && root.child('rooms').child(newData.child('bookingId').val()).child('messages').child(newData.child('messageId').val()).child('senderId').val() == auth.uid && newData.child('senderId').val() == auth.uid && newData.child('name').val() == 'New message' && newData.child('text').val() == root.child('rooms').child(newData.child('bookingId').val()).child('messages').child(newData.child('messageId').val()).child('text').val() && newData.child('createdAt').val() == now && !newData.child('readAt').exists()",
+          ".validate": "newData.hasChildren(['name','text','type','bookingId','createdAt'])",
+          "name": {
+            ".validate": "newData.isString() && newData.val().length <= 150"
+          },
+          "text": {
+            ".validate": "newData.isString() && newData.val().length <= 2000"
+          },
+          "type": {
+            ".validate": "newData.isString()"
+          },
+          "bookingId": {
+            ".validate": "newData.isString()"
+          },
+          "messageId": {
+            ".validate": "newData.isString()"
+          },
+          "senderId": {
+            ".validate": "newData.isString()"
+          },
+          "createdAt": {
+            ".validate": "newData.isNumber()"
+          },
+          "readAt": {
+            ".write": "auth != null && auth.uid == $uid && data.parent().exists()",
+            ".validate": "newData.isNumber() && newData.val() == now"
+          },
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
+    }
+  }
+}

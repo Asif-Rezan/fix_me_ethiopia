@@ -3,8 +3,21 @@ import '../data/repositories.dart';
 import 'domain.dart';
 
 const production = !bool.fromEnvironment('USE_MOCKS', defaultValue: false);
+
+class DemoMode extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void set(bool value) => state = value;
+}
+
+final demoModeProvider = NotifierProvider<DemoMode, bool>(DemoMode.new);
+final demoRepositoryProvider = Provider<DemoRepository>(
+  (ref) => DemoRepository(),
+);
 final repositoryProvider = Provider<ServiceRepository>(
-  (ref) => production ? FirebaseRepository() : DemoRepository(),
+  (ref) => production && !ref.watch(demoModeProvider)
+      ? FirebaseRepository()
+      : ref.watch(demoRepositoryProvider),
 );
 final accountProvider = StreamProvider<Account?>(
   (ref) => ref.watch(repositoryProvider).accounts,

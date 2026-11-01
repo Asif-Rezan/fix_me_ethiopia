@@ -92,7 +92,9 @@ class FirebaseTelemetry implements AppTelemetry {
 }
 
 final telemetryProvider = Provider<AppTelemetry>(
-  (ref) => production ? FirebaseTelemetry() : NoopTelemetry(),
+  (ref) => production && !ref.watch(demoModeProvider)
+      ? FirebaseTelemetry()
+      : NoopTelemetry(),
 );
 
 class TelemetryObserver extends NavigatorObserver {

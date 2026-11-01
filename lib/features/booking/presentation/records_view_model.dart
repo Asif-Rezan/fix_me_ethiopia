@@ -1,11 +1,13 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/records.dart';
 import '../../../core/state.dart';
-import '../data/firestore_records_repository.dart';
+import '../../auth/data/demo_repository.dart';
+import '../../messaging/data/realtime_repository.dart';
 
-final recordsRepositoryProvider = Provider<RecordsRepository>(
-  (ref) => FirestoreRecordsRepository(),
-);
+final recordsRepositoryProvider = Provider<RecordsRepository>((ref) {
+  final repository = ref.watch(repositoryProvider);
+  return repository is DemoRepository ? repository : RealtimeRepository();
+});
 typedef RecordQuery = ({
   String collection,
   String? ownerField,

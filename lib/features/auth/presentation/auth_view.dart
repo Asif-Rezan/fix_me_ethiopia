@@ -224,6 +224,49 @@ class _AuthViewState extends ConsumerState<AuthView> {
                         label: const Text('Continue with Google'),
                       ),
                     ),
+                    const SizedBox(height: 20),
+                    const Divider(),
+                    const Text(
+                      'Explore the complete app',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Sample accounts and data. Changes stay in this demo session.',
+                      style: TextStyle(fontSize: 12, color: Colors.grey),
+                    ),
+                    const SizedBox(height: 8),
+                    for (final demoRole in [
+                      AccountRole.customer,
+                      AccountRole.technician,
+                    ])
+                      OutlinedButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : () async {
+                                ref.read(demoModeProvider.notifier).set(true);
+                                ref
+                                    .read(demoRepositoryProvider)
+                                    .enter(demoRole);
+                                ref.invalidate(accountProvider);
+                                await ref.read(accountProvider.future);
+                                if (context.mounted) {
+                                  context.go(
+                                    '/screen/${demoRole == AccountRole.customer ? 7 : 30}',
+                                  );
+                                }
+                              },
+                        icon: Icon(
+                          demoRole == AccountRole.customer
+                              ? Icons.person_outline
+                              : Icons.handyman_outlined,
+                        ),
+                        label: Text(
+                          demoRole == AccountRole.customer
+                              ? 'Explore as customer'
+                              : 'Explore as technician',
+                        ),
+                      ),
                     if (Theme.of(context).platform == TargetPlatform.iOS &&
                         const bool.fromEnvironment('ENABLE_APPLE_SIGN_IN'))
                       TextButton(
